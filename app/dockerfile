@@ -1,0 +1,14 @@
+# On part de l'image officielle légère (Alpine)
+FROM ghost:5-alpine
+
+# On définit le répertoire de travail
+WORKDIR /var/lib/ghost
+
+# Optionnel : Tu pourrais copier un thème personnalisé ici
+# COPY ./mon-theme-custom ./content/themes/mon-theme-custom
+
+# On expose le port par défaut
+EXPOSE 2368
+
+# Commande de lancement par défaut de l'image parente
+CMD ["node", "current/index.js"]
