@@ -3,6 +3,7 @@
 *.env
 secrets.yaml
 credentials.json
+app/.env
 
 # Terraform (Fichiers locaux et états)
 .terraform/
