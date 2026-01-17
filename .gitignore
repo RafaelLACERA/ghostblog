@@ -5,6 +5,9 @@ secrets.yaml
 credentials.json
 app/.env
 
+# Exceptions
+!.env.example
+
 # Terraform (Fichiers locaux et états)
 .terraform/
 *.tfstate
