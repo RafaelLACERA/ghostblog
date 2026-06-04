@@ -1,10 +1,10 @@
-# On part de l'image officielle légère (Alpine)
-FROM ghost:5-alpine
 
-# On définit le répertoire de travail
+FROM ghost:6-alpine
+
+
 WORKDIR /var/lib/ghost
 
-# Optionnel : Tu pourrais copier un thème personnalisé ici
+# Optionnel :copier un thème personnalisé ici
 # COPY ./mon-theme-custom ./content/themes/mon-theme-custom
 
 # On expose le port par défaut
