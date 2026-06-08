@@ -24,10 +24,10 @@ services:
       ghost-db:
         condition: service_healthy
     ports:
-      - "8080:2368"
+      - "8090:2368"
     environment:
       # Remplacer localhost par IP si besoin
-      url: ${GHOST_URL:-http://localhost:8080}
+      url: ${GHOST_URL:-http://localhost:8090}
       database__client: mysql
       database__connection__host: ghost-db
       database__connection__user: ${MYSQL_USER:-ghost_user}
