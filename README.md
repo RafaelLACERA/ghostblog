@@ -42,10 +42,40 @@ Le projet abandonne le modèle lourd _Git Flow_ au profit du **Trunk-Based Devel
 1. **Cloner le dépôt :**
    ```bash
    git clone <url-du-depot-gitlab>
-   cd <nom-du-dossier>
+   cd app
    ```
 
-### Accès
+2. **Configurer les variables d'environnement :**
+   Duplique le fichier modèle `.env.example` et renseigne tes secrets :
+   ```bash
+   cp .env.example .env
+   ```
+   *(Le fichier `.env` est exclu du versioning via le `.gitignore`).*
 
-Blog : http://localhost:8090
-Administration : http://localhost:8090/ghost
+3. **Lancer la stack en local :**
+   ```bash
+   docker compose up -d
+   ```
+
+### Accès aux Services
+
+- **Blog** : http://localhost:8090
+- **Administration** : http://localhost:8090/ghost
+
+---
+
+## 🛡️ Sécurité & Secrets
+
+- **Gestion des identifiants :** Aucun secret n'est commité dans le dépôt. Les mots de passe sont générés via la méthode **Diceware** (phrases de passe à haute entropie) et injectés via les **Variables CI/CD GitLab** (masquées et protégées).
+- **Isolation des volumes :** Persistance stricte des données MySQL et des médias Ghost séparée sur des volumes dédiés.
+
+---
+
+## 🛠️ Stack Technique
+
+- **CMS Applicatif :** Ghost 5 (Alpine Edition / Node.js)
+- **Base de données :** MySQL 8.0
+- **Orchestration :** Docker Swarm / Docker Compose
+- **Infrastructure as Code :** Terraform & Ansible
+- **Cloud Provider :** AWS (EC2, EBS, EIP, VPC)
+- **CI/CD Pipeline :** GitLab CI/CD & GitLab Container Registry
