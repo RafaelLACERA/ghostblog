@@ -19,8 +19,7 @@ services:
         condition: on-failure
 
   ghost-app:
-    image: ghost:5-alpine # Attention : Ghost 5 est la version ESR ultra-stable (Ghost 6 n'est pas encore sorti)
-    ports:
+    image: ghost:6-alpine
       - "8090:2368"
     environment:
       url: ${GHOST_URL:-http://localhost:8090}
