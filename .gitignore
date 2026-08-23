@@ -26,3 +26,5 @@ Thumbs.db
 # Node 
 node_modules/
 npm-debug.log
+
+*accessKeys*.csv
