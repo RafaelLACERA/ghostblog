@@ -19,7 +19,10 @@ services:
       - ghost-net
 
   ghost-blue:
-    image: ghost:6-alpine
+    build:
+      context: .
+      dockerfile: dockerfile
+    image: registry.gitlab.com/rafaellacera/ghostblog:latest
     container_name: ghost-blue
     restart: on-failure
     depends_on:
@@ -46,7 +49,10 @@ services:
       - ghost-net
 
   ghost-green:
-    image: ghost:6-alpine
+    build:
+      context: .
+      dockerfile: dockerfile
+    image: registry.gitlab.com/rafaellacera/ghostblog:latest
     container_name: ghost-green
     restart: on-failure
     depends_on:
