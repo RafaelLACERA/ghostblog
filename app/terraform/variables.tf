@@ -21,3 +21,13 @@ variable "project_name" {
   type        = string
   default     = "ghostblog"
 }
+
+variable "admin_ip_cidr" {
+  description = "IP publique autorisée pour SSH (format CIDR, ex: 1.2.3.4/32)"
+  type        = string
+}
+
+variable "supervision_ip_cidr" {
+  description = "IP publique/privée de l'instance supervision, autorisée à scraper node_exporter"
+  type        = string
+}
