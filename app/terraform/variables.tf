@@ -10,12 +10,6 @@ variable "instance_type_app" {
   default     = "t3.micro"
 }
 
-variable "instance_type_monitoring" {
-  description = "Type d'instance pour le serveur de supervision (Zabbix)"
-  type        = string
-  default     = "t3.micro"
-}
-
 variable "project_name" {
   description = "Nom du projet, utilisé pour le tagging des ressources"
   type        = string
