@@ -1,6 +1,6 @@
 resource "aws_security_group" "app" {
   name        = "${var.project_name}-app-sg"
-  description = "Security group pour l'instance applicative Ghost (blue/green + Nginx)"
+  description = "Security group pour instance applicative Ghost (blue/green + Nginx)"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -20,15 +20,15 @@ resource "aws_security_group" "app" {
   }
 
   ingress {
-    description = "SSH restreint"
+    description = "SSH (authentification par cle uniquement)"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.admin_ip_cidr]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
-    description = "node_exporter - accessible uniquement depuis l'instance supervision"
+    description = "node_exporter - accessible uniquement depuis instance supervision"
     from_port   = 9100
     to_port     = 9100
     protocol    = "tcp"

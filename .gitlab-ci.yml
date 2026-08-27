@@ -4,6 +4,10 @@ stages:
   - test
   - deploy
 
+variables:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
 .t_terraform_validate:
   stage: .pre
   image:
@@ -20,7 +24,8 @@ terraform_validate_app:
   variables:
     TF_DIR: app/terraform
   rules:
-    - changes:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
         - app/terraform/**/*
 
 terraform_validate_supervision:
@@ -28,5 +33,54 @@ terraform_validate_supervision:
   variables:
     TF_DIR: supervision/terraform
   rules:
-    - changes:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
         - supervision/terraform/**/*
+
+.t_terraform_plan:
+  stage: build
+  image:
+    name: hashicorp/terraform:1.15
+    entrypoint: [""]
+  script:
+    - cd $TF_DIR
+    - >
+      terraform init
+      -backend-config="address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"
+      -backend-config="lock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
+      -backend-config="unlock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
+      -backend-config="username=gitlab-ci-token"
+      -backend-config="password=${CI_JOB_TOKEN}"
+      -backend-config="lock_method=POST"
+      -backend-config="unlock_method=DELETE"
+      -backend-config="retry_wait_min=5"
+    - terraform plan -out=tfplan
+  artifacts:
+    paths:
+      - $TF_DIR/tfplan
+    expire_in: 1 hour
+
+terraform_plan_app:
+  extends: .t_terraform_plan
+  variables:
+    TF_DIR: app/terraform
+    TF_STATE_NAME: app
+    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/**/*
+
+build_ghost_image:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA -f app/dockerfile app
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/dockerfile
