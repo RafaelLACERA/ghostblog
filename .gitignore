@@ -28,3 +28,7 @@ node_modules/
 npm-debug.log
 
 *accessKeys*.csv
+
+*init-local*.sh
+**/terraforminit.sh
+**/*-local.sh
