@@ -1,0 +1,24 @@
+stages:
+  - .pre
+  - build
+  - test
+  - deploy
+
+.t_terraform_validate:
+  stage: .pre
+  image:
+    name: hashicorp/terraform:1.15
+    entrypoint: [""]
+  script:
+    - cd $TF_DIR
+    - terraform fmt -check -recursive
+    - terraform init -backend=false
+    - terraform validate
+
+terraform_validate_app:
+  extends: .t_terraform_validate
+  variables:
+    TF_DIR: app/terraform
+  rules:
+    - changes:
+        - app/terraform/**/*
