@@ -22,3 +22,11 @@ terraform_validate_app:
   rules:
     - changes:
         - app/terraform/**/*
+
+terraform_validate_supervision:
+  extends: .t_terraform_validate
+  variables:
+    TF_DIR: supervision/terraform
+  rules:
+    - changes:
+        - supervision/terraform/**/*
