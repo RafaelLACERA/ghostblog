@@ -36,7 +36,7 @@ resource "aws_security_group" "app" {
   }
 
   egress {
-    description = "Tout le trafic sortant autorisé"
+    description = "Tout le trafic sortant autorise"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
