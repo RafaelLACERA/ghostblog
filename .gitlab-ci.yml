@@ -49,7 +49,7 @@ terraform_validate_supervision:
       -backend-config="address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"
       -backend-config="lock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
       -backend-config="unlock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
-      -backend-config="username=${GITLAB_USER_LOGIN}"
+      -backend-config="username=gitlab-ci-token"
       -backend-config="password=${CI_JOB_TOKEN}"
       -backend-config="lock_method=POST"
       -backend-config="unlock_method=DELETE"
