@@ -124,52 +124,35 @@ build_ghost_image:
       changes:
         - app/dockerfile
 
-# Recupere l'IP publique et la cle SSH depuis le state Terraform de app/.
-# Artifact ephemere (15 min), consomme uniquement par configure_app dans le
-# meme pipeline : pas de cle privee stockee en variable CI/CD permanente,
-# vu qu'elle change a chaque cycle apply/destroy.
-fetch_app_connection:
+# Recupere IP + cle SSH depuis le state Terraform et lance Ansible, dans le
+# MEME job : la cle privee ne quitte jamais le systeme de fichiers ephemere
+# de ce job (pas d'artifact GitLab telechargeable contenant la cle, meme
+# de facon temporaire - un artifact reste accessible en telechargement par
+# quiconque a acces au projet pendant sa duree de vie).
+configure_app:
   extends: .tf_image
   stage: deploy
   variables:
     TF_DIR: app/terraform
     TF_STATE_NAME: app
+    ANSIBLE_CONFIG: $CI_PROJECT_DIR/app/ansible/ansible.cfg
   needs:
     - job: deploy_app_infra
       optional: true
+  before_script:
+    - apk add --no-cache ansible openssh-client
   script:
     - cd $TF_DIR
     - !reference [.tf_backend_init, script]
     - terraform output -raw app_public_ip > ../../app_ip.txt
     - terraform output -raw app_ssh_private_key > ../../ssh_key.pem
-  artifacts:
-    paths:
-      - app_ip.txt
-      - ssh_key.pem
-    expire_in: 15 minutes
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/**/*
-        - app/ansible/**/*
-
-configure_app:
-  stage: deploy
-  image: alpine:3.20
-  variables:
-    # ansible.cfg vit dans app/ansible/, pas a la racine ou tourne le job :
-    # sans ca, host_key_checking=False (entre autres) ne serait pas applique.
-    ANSIBLE_CONFIG: $CI_PROJECT_DIR/app/ansible/ansible.cfg
-  before_script:
-    - apk add --no-cache ansible openssh-client
-    - chmod 600 ssh_key.pem
-  needs:
-    - fetch_app_connection
-  script:
+    - chmod 600 ../../ssh_key.pem
+    - cd ../..
     - ansible-playbook -i "$(cat app_ip.txt)," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
+        - app/terraform/**/*
         - app/ansible/**/*
       when: manual
 
