@@ -8,11 +8,27 @@ variables:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
 
-.t_terraform_validate:
-  stage: .pre
+.tf_image:
   image:
     name: hashicorp/terraform:1.15
     entrypoint: [""]
+
+.tf_backend_init:
+  script:
+    - >
+      terraform init
+      -backend-config="address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"
+      -backend-config="lock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
+      -backend-config="unlock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
+      -backend-config="username=gitlab-ci-token"
+      -backend-config="password=${CI_JOB_TOKEN}"
+      -backend-config="lock_method=POST"
+      -backend-config="unlock_method=DELETE"
+      -backend-config="retry_wait_min=5"
+
+.t_terraform_validate:
+  extends: .tf_image
+  stage: .pre
   script:
     - cd $TF_DIR
     - terraform fmt -check -recursive
@@ -37,39 +53,59 @@ terraform_validate_supervision:
       changes:
         - supervision/terraform/**/*
 
-.t_terraform_plan:
-  stage: build
-  image:
-    name: hashicorp/terraform:1.15
-    entrypoint: [""]
+# Job manuel unique (bouton GitLab) : fmt -> init -> validate -> plan -> apply.
+# GitLab arrete le job a la premiere commande en echec (ex: plan invalide),
+# l'apply ne s'execute donc jamais si une etape precedente a echoue.
+.t_terraform_deploy:
+  extends: .tf_image
+  stage: deploy
   script:
     - cd $TF_DIR
-    - >
-      terraform init
-      -backend-config="address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}"
-      -backend-config="lock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
-      -backend-config="unlock_address=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/${TF_STATE_NAME}/lock"
-      -backend-config="username=gitlab-ci-token"
-      -backend-config="password=${CI_JOB_TOKEN}"
-      -backend-config="lock_method=POST"
-      -backend-config="unlock_method=DELETE"
-      -backend-config="retry_wait_min=5"
+    - terraform fmt -check -recursive
+    - !reference [.tf_backend_init, script]
+    - terraform validate
     - terraform plan -out=tfplan
-  artifacts:
-    paths:
-      - $TF_DIR/tfplan
-    expire_in: 1 hour
+    - terraform apply tfplan
 
-terraform_plan_app:
-  extends: .t_terraform_plan
+deploy_app_infra:
+  extends: .t_terraform_deploy
   variables:
     TF_DIR: app/terraform
     TF_STATE_NAME: app
     TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
+  environment:
+    name: app
+    action: start
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/**/*
+      when: manual
+
+# Job manuel de demontage complet, pour eviter de supprimer les ressources
+# a la main dans la console AWS (source de drift avec le state Terraform).
+.t_terraform_destroy:
+  extends: .tf_image
+  stage: deploy
+  script:
+    - cd $TF_DIR
+    - !reference [.tf_backend_init, script]
+    - terraform destroy -auto-approve
+
+destroy_app_infra:
+  extends: .t_terraform_destroy
+  variables:
+    TF_DIR: app/terraform
+    TF_STATE_NAME: app
+    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
+  environment:
+    name: app
+    action: stop
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/**/*
+      when: manual
 
 build_ghost_image:
   stage: build
