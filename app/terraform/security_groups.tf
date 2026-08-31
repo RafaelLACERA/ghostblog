@@ -1,3 +1,4 @@
+# Complete par le role Ansible "hardening" (UFW + sshd_config) au niveau OS.
 resource "aws_security_group" "app" {
   name        = "${var.project_name}-app-sg"
   description = "Security group partage par les instances Ghost prod et preprod (Nginx)"
