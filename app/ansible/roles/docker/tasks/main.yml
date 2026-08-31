@@ -1,0 +1,57 @@
+---
+# Procedure officielle Docker (docs.docker.com), format deb822
+
+- name: Mettre a jour le cache apt
+  ansible.builtin.apt:
+    update_cache: true
+
+- name: Installer les paquets prerequis
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+
+- name: Creer le dossier des cles apt
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Telecharger la cle GPG officielle Docker
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: "0644"
+
+- name: Ajouter le depot Docker
+  ansible.builtin.template:
+    src: docker.sources.j2
+    dest: /etc/apt/sources.list.d/docker.sources
+    mode: "0644"
+  notify: Rafraichir le cache apt
+
+- name: Appliquer le rafraichissement du cache apt tout de suite
+  ansible.builtin.meta: flush_handlers
+
+- name: Installer Docker Engine et les plugins Buildx/Compose
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+
+- name: Ajouter l'utilisateur ubuntu au groupe docker
+  ansible.builtin.user:
+    name: ubuntu
+    groups: docker
+    append: true
+
+- name: Demarrer et activer Docker
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
