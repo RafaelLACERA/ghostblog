@@ -5,7 +5,7 @@ variable "aws_region" {
 }
 
 variable "instance_type_app" {
-  description = "Type d'instance pour le serveur applicatif (Ghost blue/green)"
+  description = "Type d'instance pour le serveur applicatif Ghost"
   type        = string
   default     = "t3.micro"
 }
