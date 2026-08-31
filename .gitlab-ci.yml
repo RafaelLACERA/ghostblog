@@ -156,6 +156,10 @@ fetch_app_connection:
 configure_app:
   stage: deploy
   image: alpine:3.20
+  variables:
+    # ansible.cfg vit dans app/ansible/, pas a la racine ou tourne le job :
+    # sans ca, host_key_checking=False (entre autres) ne serait pas applique.
+    ANSIBLE_CONFIG: $CI_PROJECT_DIR/app/ansible/ansible.cfg
   before_script:
     - apk add --no-cache ansible openssh-client
     - chmod 600 ssh_key.pem
