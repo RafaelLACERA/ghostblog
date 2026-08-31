@@ -1,0 +1,6 @@
+---
+- name: Provisionner l'instance applicative Ghost
+  hosts: all
+  become: true
+  roles:
+    - hardening

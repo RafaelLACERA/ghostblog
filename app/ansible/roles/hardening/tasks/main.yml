@@ -1,0 +1,53 @@
+---
+# 1. Pare-feu (UFW)
+# Port 22 laisse ouvert a tous car le pipeline GitLab n'a pas d'IP fixe
+# (contrairement a un poste local classique)
+- name: Mettre a jour le cache apt
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Installer UFW
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Autoriser SSH dans UFW (pas de restriction IP, cle uniquement)
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: Autoriser HTTP dans UFW
+  community.general.ufw:
+    rule: allow
+    port: "80"
+    proto: tcp
+
+- name: Autoriser HTTPS dans UFW
+  community.general.ufw:
+    rule: allow
+    port: "443"
+    proto: tcp
+
+- name: Activer UFW avec politique par defaut deny en entree
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+# 2. Durcissement SSH
+
+- name: Interdire la connexion SSH root
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: "PermitRootLogin no"
+  notify: Redemarrer SSH
+
+- name: Desactiver l'authentification SSH par mot de passe (cle uniquement)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: "PasswordAuthentication no"
+  notify: Redemarrer SSH

@@ -124,6 +124,51 @@ build_ghost_image:
       changes:
         - app/dockerfile
 
+# Recupere l'IP publique et la cle SSH depuis le state Terraform de app/.
+# Artifact ephemere (15 min), consomme uniquement par configure_app dans le
+# meme pipeline : pas de cle privee stockee en variable CI/CD permanente,
+# vu qu'elle change a chaque cycle apply/destroy.
+fetch_app_connection:
+  extends: .tf_image
+  stage: deploy
+  variables:
+    TF_DIR: app/terraform
+    TF_STATE_NAME: app
+  needs:
+    - job: deploy_app_infra
+      optional: true
+  script:
+    - cd $TF_DIR
+    - !reference [.tf_backend_init, script]
+    - terraform output -raw app_public_ip > ../../app_ip.txt
+    - terraform output -raw app_ssh_private_key > ../../ssh_key.pem
+  artifacts:
+    paths:
+      - app_ip.txt
+      - ssh_key.pem
+    expire_in: 15 minutes
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/**/*
+        - app/ansible/**/*
+
+configure_app:
+  stage: deploy
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache ansible openssh-client
+    - chmod 600 ssh_key.pem
+  needs:
+    - fetch_app_connection
+  script:
+    - ansible-playbook -i "$(cat app_ip.txt)," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/ansible/**/*
+      when: manual
+
 tflint_app:
   stage: test
   image:
