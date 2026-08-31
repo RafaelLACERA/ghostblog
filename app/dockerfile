@@ -1,6 +1,13 @@
 
 FROM ghost:6-alpine
 
+# Suite a l'ajout du scan trivy (scan_ghost_image) : mise a jour des paquets
+# de l'image ghost:6-alpine pour patcher le systeme (apk update && apk upgrade).
+# Apres recherche, certaines vulnerabilites detectees viennent de binaires et
+# dependances npm fournis tels quels par l'image ghost:6-alpine elle-meme
+# (pas geres par apk) : risque documente et accepte en attendant une mise a
+# jour de l'image officielle.
+RUN apk update && apk upgrade --no-cache
 
 WORKDIR /var/lib/ghost
 
