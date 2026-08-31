@@ -1,6 +1,6 @@
 resource "aws_security_group" "app" {
   name        = "${var.project_name}-app-sg"
-  description = "Security group pour instance applicative Ghost (blue/green + Nginx)"
+  description = "Security group partage par les instances Ghost prod et preprod (Nginx)"
   vpc_id      = aws_vpc.main.id
 
   ingress {
