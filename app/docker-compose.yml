@@ -22,7 +22,7 @@ services:
     build:
       context: .
       dockerfile: dockerfile
-    image: registry.gitlab.com/rafaellacera/ghostblog:latest
+    image: registry.gitlab.com/rafaellacera/ghostblog:${IMAGE_TAG:-latest}
     container_name: ghost
     restart: on-failure
     depends_on:
