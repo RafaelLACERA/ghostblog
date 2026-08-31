@@ -1,81 +1,61 @@
-# 👻 Ghost Infrastructure Project — DevSecOps Edition
+# Ghostblog — Projet de certification ASD (DevOps)
 
-Ce projet implémente une plateforme de blogging **Ghost** sécurisée, sobre et hautement disponible. L'infrastructure est déployée sur **AWS** via une démarche **IaC (Terraform & Ansible)** et orchestrée avec **Docker Swarm**.
+Déploiement d'un blog **Ghost CMS** sur AWS, piloté de bout en bout via un pipeline **GitLab CI/CD** (Terraform pour l'infrastructure, Docker pour l'application). Projet réalisé dans le cadre de la certification **Administrateur Système DevOps (ASD, niveau 6, RNCP36061)**.
 
----
+## Architecture
 
-## 🏗️ Architecture & Philosophie DevOps
+- **Instance applicative unique** (AWS EC2 + Elastic IP) hébergeant Ghost via Docker Compose (MySQL 8.0 + Ghost).
+- **Environnements preprod / prod classiques**: deux instances EC2 distinctes prévues via le même module Terraform réutilisable (`app/terraform/modules/ec2-instance`) — à ce stade, seule l'instance de production est provisionnée.
+  - `ghost.lacera.fr` → production
+  - `preprod.lacera.fr` → préproduction (à venir)
+- **Instance de supervision séparée** (Prometheus/Grafana, à venir) dans le domaine `supervision/`.
+- DNS géré chez OVH.
 
-Le projet repose sur des principes forts :
+## Structure du dépôt
 
-- **KISS & FinOps :** Architecture optimisée sur instance unique AWS EC2 (avec Elastic IP et stockage persistant EBS) pour éviter l'over-engineering et maîtriser l'empreinte cloud.
-- **Blue-Green Deployment :** Stratégie de déploiement sans coupure de service (_Zero Downtime_) gérée via un Reverse Proxy Nginx.
-- **DevSecOps :** Rotation des secrets, passphrases à haute entropie (méthode Diceware), masquage des variables d'environnement, et scans de sécurité automatisés (Trivy).
+- `app/` : stack applicative (`docker-compose.yml`, `dockerfile`) et infrastructure Terraform (`app/terraform/`) de l'instance app.
+- `supervision/` : infrastructure et configuration de la stack de supervision (en cours).
+- `.gitlab-ci.yml` : pipeline CI/CD (validation et déploiement Terraform, build de l'image Ghost).
 
-### Structure du Dépôt
+## Git Workflow : Trunk-Based Development
 
-- **/app** : Stack applicative (Ghost, MySQL 8.0, configurations Docker Swarm / Compose).
-- **/infra** : Code IaC (Terraform pour le provisionnement AWS, Playbooks Ansible pour la configuration).
-- **/.gitlab-ci.yml** : Pipeline d'intégration et de déploiement continus.
+- **Trunk unique (`main`)**, pas de branches `develop`/`release`.
+- Branches de fonctionnalités courtes (`feature/<nom>`), une Merge Request par contribution.
 
----
+## Démarrage rapide (local)
 
-## 🌿 Git Workflow : Trunk-Based Development
+Prérequis : Docker Engine + Docker Compose.
 
-Le projet abandonne le modèle lourd _Git Flow_ au profit du **Trunk-Based Development** :
+```bash
+cd app
+cp .env.example .env   # renseigner les secrets locaux
+docker compose up -d --build
+```
 
-- **Trunk unique (`main`) :** Seule branche pérenne du projet.
-- **Short-Lived Feature Branches :** Branches de fonctionnalités très courtes créées via `git switch -c feature/<nom>`.
-- **Merge Requests (MR) :** Validation rapide et fusion immédiate sur `main` pour garantir une intégration continue réelle et fluide.
+- Blog : http://localhost:8090
+- Administration : http://localhost:8090/ghost
 
----
+## Infrastructure (Terraform)
 
-## 🚀 Démarrage Rapide (Environnement Local)
+```bash
+cd app/terraform
+terraform init
+terraform plan
+terraform apply
+```
 
-### Pré-requis
+Le backend d'état Terraform est géré par GitLab (`backend "http"`), initialisé dynamiquement par le pipeline CI/CD. La clé SSH de l'instance est générée par Terraform (`tls_private_key`) et exposée en sortie sensible.
 
-- Docker Engine / Docker Compose
-- Git (version 2.23+ recommandée pour `git switch`)
+## Sécurité
 
-### Installation & Lancement
+- Aucun secret n'est commité dans le dépôt (`.env`, clés, tokens sont dans `.gitignore`).
+- Les credentials AWS et variables sensibles sont gérées via les **variables CI/CD GitLab** (masquées).
 
-1. **Cloner le dépôt :**
-   ```bash
-   git clone <url-du-depot-gitlab>
-   cd app
-   ```
+## Stack technique
 
-2. **Configurer les variables d'environnement :**
-   Duplique le fichier modèle `.env.example` et renseigne tes secrets :
-   ```bash
-   cp .env.example .env
-   ```
-   *(Le fichier `.env` est exclu du versioning via le `.gitignore`).*
-
-3. **Lancer la stack en local :**
-   ```bash
-   docker compose up -d
-   ```
-
-### Accès aux Services
-
-- **Blog** : http://localhost:8090
-- **Administration** : http://localhost:8090/ghost
-
----
-
-## 🛡️ Sécurité & Secrets
-
-- **Gestion des identifiants :** Aucun secret n'est commité dans le dépôt. Les mots de passe sont générés via la méthode **Diceware** (phrases de passe à haute entropie) et injectés via les **Variables CI/CD GitLab** (masquées et protégées).
-- **Isolation des volumes :** Persistance stricte des données MySQL et des médias Ghost séparée sur des volumes dédiés.
-
----
-
-## 🛠️ Stack Technique
-
-- **CMS Applicatif :** Ghost 5 (Alpine Edition / Node.js)
-- **Base de données :** MySQL 8.0
-- **Orchestration :** Docker Swarm / Docker Compose
-- **Infrastructure as Code :** Terraform & Ansible
-- **Cloud Provider :** AWS (EC2, EBS, EIP, VPC)
-- **CI/CD Pipeline :** GitLab CI/CD & GitLab Container Registry
+- **CMS** : Ghost 6 (image `ghost:6-alpine`)
+- **Base de données** : MySQL 8.0
+- **Conteneurisation** : Docker / Docker Compose
+- **Infrastructure as Code** : Terraform
+- **Cloud** : AWS (EC2, EIP, VPC)
+- **CI/CD** : GitLab CI/CD & GitLab Container Registry
