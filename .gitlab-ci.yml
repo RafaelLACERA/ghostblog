@@ -1,3 +1,6 @@
+include:
+  - template: Security/Secret-Detection.gitlab-ci.yml
+
 stages:
   - .pre
   - build
@@ -83,7 +86,7 @@ deploy_app_infra:
       when: manual
 
 # Job manuel de demontage complet, pour eviter de supprimer les ressources
-# a la main dans la console AWS (source de drift avec le state Terraform).
+# a la main dans la console AWS.
 .t_terraform_destroy:
   extends: .tf_image
   stage: deploy
@@ -116,6 +119,51 @@ build_ghost_image:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
     - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA -f app/dockerfile app
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/dockerfile
+
+tflint_app:
+  stage: test
+  image:
+    name: ghcr.io/terraform-linters/tflint:latest
+    entrypoint: [""]
+  script:
+    - cd app/terraform
+    - tflint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/**/*
+
+hadolint_dockerfile:
+  stage: test
+  image:
+    name: hadolint/hadolint:latest-debian
+    entrypoint: [""]
+  script:
+    - hadolint app/dockerfile
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/dockerfile
+
+# Scan de vulnerabilites (CVE) sur l'image Ghost buildee. exit-code 0 pour
+# l'instant (rapport informatif, ne bloque pas le merge) le temps de trier
+# les premiers resultats ; a passer a --exit-code 1 une fois fait.
+scan_ghost_image:
+  stage: test
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  variables:
+    TRIVY_USERNAME: $CI_REGISTRY_USER
+    TRIVY_PASSWORD: $CI_REGISTRY_PASSWORD
+  needs:
+    - build_ghost_image
+  script:
+    - trivy image --exit-code 0 --severity CRITICAL,HIGH $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
