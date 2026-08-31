@@ -83,6 +83,7 @@ deploy_app_infra:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/**/*
+        - app/ansible/**/*
       when: manual
 
 # Job manuel de demontage complet, pour eviter de supprimer les ressources
@@ -108,6 +109,7 @@ destroy_app_infra:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/**/*
+        - app/ansible/**/*
       when: manual
 
 build_ghost_image:
@@ -148,6 +150,11 @@ configure_app:
     - terraform output -raw app_ssh_private_key > ../../ssh_key.pem
     - chmod 600 ../../ssh_key.pem
     - cd ../..
+    - >
+      if [ ! -s app_ip.txt ]; then
+        echo "Aucune IP recuperee : l'instance app n'existe pas (lancer deploy_app_infra d'abord)."
+        exit 1
+      fi
     - ansible-playbook -i "$(cat app_ip.txt)," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
