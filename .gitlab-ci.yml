@@ -58,7 +58,7 @@ terraform_validate_supervision:
 
 # Job manuel unique (bouton GitLab) : fmt -> init -> validate -> plan -> apply.
 # GitLab arrete le job a la premiere commande en echec (ex: plan invalide),
-# l'apply ne s'execute donc jamais si une etape precedente a echoue.
+# l'apply ne s'execute donc jamais si une etape precedente a echouer
 .t_terraform_deploy:
   extends: .tf_image
   stage: deploy
@@ -83,6 +83,7 @@ deploy_app_infra:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/**/*
+        - app/ansible/**/*
       when: manual
 
 # Job manuel de demontage complet, pour eviter de supprimer les ressources
@@ -108,6 +109,7 @@ destroy_app_infra:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/**/*
+        - app/ansible/**/*
       when: manual
 
 build_ghost_image:
@@ -145,10 +147,16 @@ configure_app:
     - cd $TF_DIR
     - !reference [.tf_backend_init, script]
     - terraform output -raw app_public_ip > ../../app_ip.txt
+    - terraform output -raw preprod_public_ip > ../../preprod_ip.txt
     - terraform output -raw app_ssh_private_key > ../../ssh_key.pem
     - chmod 600 ../../ssh_key.pem
     - cd ../..
-    - ansible-playbook -i "$(cat app_ip.txt)," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml
+    - >
+      if [ ! -s app_ip.txt ] || [ ! -s preprod_ip.txt ]; then
+        echo "IP manquante : les instances app/preprod n'existent pas (lancer deploy_app_infra d'abord)."
+        exit 1
+      fi
+    - ansible-playbook -i "$(cat app_ip.txt),$(cat preprod_ip.txt)" -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -181,9 +189,7 @@ hadolint_dockerfile:
       changes:
         - app/dockerfile
 
-# Scan de vulnerabilites (CVE) sur l'image Ghost buildee. exit-code 0 pour
-# l'instant (rapport informatif, ne bloque pas le merge) le temps de trier
-# les premiers resultats ; a passer a --exit-code 1 une fois fait.
+# Scan de vulnerabilites (CVE) sur l'image Ghost buildee. exit-code 0 
 scan_ghost_image:
   stage: test
   image:
