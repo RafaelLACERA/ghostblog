@@ -14,6 +14,9 @@ app/.env
 *.tfstate.backup
 .terraform.lock.hcl
 
+# Ansible (cache local)
+.ansible/
+
 # Docker (Données locales)
 db_data/
 ghost_content/
