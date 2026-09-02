@@ -134,7 +134,10 @@ build_ghost_image:
 # de ce job (pas d'artifact GitLab telechargeable contenant la cle, meme
 # de facon temporaire - un artifact reste accessible en telechargement par
 # quiconque a acces au projet pendant sa duree de vie).
-configure_app:
+# TF_OUTPUT_IP designe quel output Terraform lire (app_public_ip ou
+# staging_public_ip) : chaque job ne cible qu'UNE instance, jamais les deux
+# a la fois - staging est teste avant que prod ne soit mise a jour.
+.t_ansible_deploy:
   extends: .tf_image
   stage: deploy
   variables:
@@ -151,27 +154,56 @@ configure_app:
   script:
     - cd $TF_DIR
     - !reference [.tf_backend_init, script]
-    - terraform output -raw app_public_ip > ../../app_ip.txt
-    - terraform output -raw preprod_public_ip > ../../preprod_ip.txt
+    - terraform output -raw $TF_OUTPUT_IP > ../../target_ip.txt
     - terraform output -raw app_ssh_private_key > ../../ssh_key.pem
     - chmod 600 ../../ssh_key.pem
     - cd ../..
     - >
-      if [ ! -s app_ip.txt ] || [ ! -s preprod_ip.txt ]; then
-        echo "IP manquante : les instances app/preprod n'existent pas (lancer deploy_app_infra d'abord)."
+      if [ ! -s target_ip.txt ]; then
+        echo "IP manquante : l'instance n'existe pas (lancer deploy_app_infra d'abord)."
         exit 1
       fi
     - >
-      ansible-playbook -i "$(cat app_ip.txt),$(cat preprod_ip.txt)" -u ubuntu --private-key ssh_key.pem
+      ansible-playbook -i "$(cat target_ip.txt)," -u ubuntu --private-key ssh_key.pem
       app/ansible/playbook.yml
+      -e ghost_app_image_tag=$CI_COMMIT_SHORT_SHA
       -e ghost_app_registry_url=$CI_REGISTRY
       -e ghost_app_registry_user=$CI_REGISTRY_USER
       -e ghost_app_registry_password=$CI_REGISTRY_PASSWORD
+
+# Continuous Delivery : chaque push livre automatiquement la nouvelle image
+# sur staging, sans creer ni couter d'infra supplementaire (l'instance doit
+# deja exister). La mise en prod reste un choix manuel separe (deploy_prod) :
+# ce n'est pas du Continuous Deployment.
+deliver_staging:
+  extends: .t_ansible_deploy
+  variables:
+    TF_OUTPUT_IP: staging_public_ip
+  environment:
+    name: staging
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/**/*
         - app/ansible/**/*
+        - app/dockerfile
+        - app/docker-compose.yml
+
+# Manuel : promotion volontaire vers prod du meme tag d'image que celui
+# valide sur staging, jamais automatique.
+deploy_prod:
+  extends: .t_ansible_deploy
+  variables:
+    TF_OUTPUT_IP: app_public_ip
+  environment:
+    name: app
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/**/*
+        - app/ansible/**/*
+        - app/dockerfile
+        - app/docker-compose.yml
       when: manual
 
 tflint_app:
