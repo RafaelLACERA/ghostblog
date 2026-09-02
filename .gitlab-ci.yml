@@ -166,11 +166,6 @@ destroy_data:
         - app/terraform-data/**/*
       when: manual
 
-# --cache-from reutilise les couches de :latest pour accelerer le build en
-# phase de test actif. Compromis assume : la couche "apk update && apk
-# upgrade" du dockerfile serait aussi mise en cache, donc pas forcement
-# rejouee a chaque build - a retirer avant la mise en prod finale pour
-# garantir des paquets Alpine toujours a jour.
 build_ghost_image:
   stage: build
   image: docker:27
@@ -178,8 +173,7 @@ build_ghost_image:
     - docker:27-dind
   script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker pull $CI_REGISTRY_IMAGE:latest || true
-    - docker build --cache-from $CI_REGISTRY_IMAGE:latest -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA -t $CI_REGISTRY_IMAGE:latest -f app/dockerfile app
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA -t $CI_REGISTRY_IMAGE:latest -f app/dockerfile app
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
     - docker push $CI_REGISTRY_IMAGE:latest
   rules:
