@@ -13,7 +13,9 @@ Déploiement d'un blog **Ghost CMS** sur AWS, piloté de bout en bout via un pip
 
 ## Structure du dépôt
 
-- `app/` : stack applicative (`docker-compose.yml`, `dockerfile`), infrastructure Terraform (`app/terraform/`) et rôles Ansible (`app/ansible/` : `hardening`, `docker`, `ghost_app`) provisionnant les instances prod et staging.
+- `app/` : stack applicative (`docker-compose.yml`, `dockerfile`), rôles Ansible (`app/ansible/` : `hardening`, `docker`, `ghost_app`) provisionnant les instances prod et staging, et deux states Terraform à cycles de vie distincts :
+  - `app/terraform-data/` : couche persistante (VPC, subnets, security group) — jamais détruite par les tests EC2.
+  - `app/terraform/` : instances EC2 prod/staging, jetables et recréées à chaque cycle de test, lisant le réseau via `terraform_remote_state`.
 - `supervision/` : infrastructure et configuration de la stack de supervision (en cours).
 - `.gitlab-ci.yml` : pipeline CI/CD (validation et déploiement Terraform, build de l'image Ghost).
 

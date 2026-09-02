@@ -10,6 +10,12 @@ stages:
 variables:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
+  # Consommees par app/terraform/remote_state.tf pour lire le state
+  # persistant app-data (VPC/subnets/security group). Inoffensives pour
+  # les jobs qui ne les utilisent pas.
+  TF_VAR_gitlab_api_url: $CI_API_V4_URL
+  TF_VAR_gitlab_project_id: $CI_PROJECT_ID
+  TF_VAR_gitlab_ci_job_token: $CI_JOB_TOKEN
 
 .tf_image:
   image:
@@ -56,6 +62,15 @@ terraform_validate_supervision:
       changes:
         - supervision/terraform/**/*
 
+terraform_validate_data:
+  extends: .t_terraform_validate
+  variables:
+    TF_DIR: app/terraform-data
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform-data/**/*
+
 # Job manuel unique (bouton GitLab) : fmt -> init -> validate -> plan -> apply.
 # GitLab arrete le job a la premiere commande en echec (ex: plan invalide),
 # l'apply ne s'execute donc jamais si une etape precedente a echouer
@@ -86,6 +101,24 @@ deploy_app_infra:
         - app/ansible/**/*
       when: manual
 
+# Couche persistante (VPC, subnets, security group) : jamais detruite par le
+# cycle de test EC2 (deploy_app_infra/destroy_app_infra), volontairement
+# separee dans son propre state. Manuel et rare.
+deploy_data:
+  extends: .t_terraform_deploy
+  variables:
+    TF_DIR: app/terraform-data
+    TF_STATE_NAME: app-data
+    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
+  environment:
+    name: data
+    action: start
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform-data/**/*
+      when: manual
+
 # Job manuel de demontage complet, pour eviter de supprimer les ressources
 # a la main dans la console AWS.
 .t_terraform_destroy:
@@ -110,6 +143,21 @@ destroy_app_infra:
       changes:
         - app/terraform/**/*
         - app/ansible/**/*
+      when: manual
+
+destroy_data:
+  extends: .t_terraform_destroy
+  variables:
+    TF_DIR: app/terraform-data
+    TF_STATE_NAME: app-data
+    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
+  environment:
+    name: data
+    action: stop
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform-data/**/*
       when: manual
 
 build_ghost_image:
@@ -218,6 +266,19 @@ tflint_app:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/**/*
+
+tflint_data:
+  stage: test
+  image:
+    name: ghcr.io/terraform-linters/tflint:latest
+    entrypoint: [""]
+  script:
+    - cd app/terraform-data
+    - tflint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform-data/**/*
 
 hadolint_dockerfile:
   stage: test

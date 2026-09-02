@@ -22,7 +22,18 @@ variable "project_name" {
   default     = "ghostblog"
 }
 
-variable "supervision_ip_cidr" {
-  description = "IP publique/privée de l'instance supervision, autorisée à scraper node_exporter"
+variable "gitlab_api_url" {
+  description = "URL de base de l'API GitLab, pour lire le state distant app-data"
   type        = string
+}
+
+variable "gitlab_project_id" {
+  description = "ID du projet GitLab, pour lire le state distant app-data"
+  type        = string
+}
+
+variable "gitlab_ci_job_token" {
+  description = "Token d'authentification pour lire le state distant app-data"
+  type        = string
+  sensitive   = true
 }

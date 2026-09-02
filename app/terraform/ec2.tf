@@ -3,8 +3,8 @@ module "app_instance" {
 
   name               = "${var.project_name}-app"
   instance_type      = var.instance_type_app
-  subnet_id          = aws_subnet.public.id
-  security_group_ids = [aws_security_group.app.id]
+  subnet_id          = data.terraform_remote_state.data.outputs.public_subnet_id
+  security_group_ids = [data.terraform_remote_state.data.outputs.app_security_group_id]
   key_name           = aws_key_pair.app.key_name
   project_name       = var.project_name
 }
@@ -16,8 +16,8 @@ module "staging_instance" {
 
   name               = "${var.project_name}-staging"
   instance_type      = var.instance_type_staging
-  subnet_id          = aws_subnet.public.id
-  security_group_ids = [aws_security_group.app.id]
+  subnet_id          = data.terraform_remote_state.data.outputs.public_subnet_id
+  security_group_ids = [data.terraform_remote_state.data.outputs.app_security_group_id]
   key_name           = aws_key_pair.app.key_name
   project_name       = var.project_name
 }

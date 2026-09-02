@@ -30,6 +30,21 @@ resource "aws_subnet" "public" {
   }
 }
 
+# Deuxieme subnet, dans une autre AZ : aucune instance n'y est placee, il
+# existe uniquement parce que RDS exige un "DB subnet group" couvrant au
+# moins 2 zones de disponibilite, meme pour une instance mono-AZ.
+resource "aws_subnet" "secondary" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "${var.aws_region}b"
+  map_public_ip_on_launch = false
+
+  tags = {
+    Name    = "${var.project_name}-secondary-subnet"
+    Project = var.project_name
+  }
+}
+
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
