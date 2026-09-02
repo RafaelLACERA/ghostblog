@@ -203,9 +203,12 @@ build_ghost_image:
     TF_DIR: app/terraform
     TF_STATE_NAME: app
     ANSIBLE_CONFIG: $CI_PROJECT_DIR/app/ansible/ansible.cfg
+  # Pas de needs sur deploy_app_infra : ce serait redondant avec le
+  # garde-fou (verifie que l'IP/la base existent) et le resource_group
+  # (empeche toute course avec un deploy/destroy en cours), et ca forcerait
+  # un clic inutile sur deploy_app_infra a chaque nouveau pipeline meme
+  # quand l'infra existe deja et n'a pas change.
   needs:
-    - job: deploy_app_infra
-      optional: true
     - job: build_ghost_image
   before_script:
     - apk add --no-cache ansible openssh-client jq
