@@ -184,14 +184,18 @@ build_ghost_image:
         - app/ansible/**/*
         - app/terraform/**/*
 
-# Recupere IP + cle SSH depuis le state Terraform et lance Ansible, dans le
-# MEME job : la cle privee ne quitte jamais le systeme de fichiers ephemere
-# de ce job (pas d'artifact GitLab telechargeable contenant la cle, meme
-# de facon temporaire - un artifact reste accessible en telechargement par
-# quiconque a acces au projet pendant sa duree de vie).
-# TF_OUTPUT_IP designe quel output Terraform lire (app_public_ip ou
-# staging_public_ip) : chaque job ne cible qu'UNE instance, jamais les deux
-# a la fois - staging est teste avant que prod ne soit mise a jour.
+# Recupere IP + cle SSH + infos RDS depuis le state Terraform et lance
+# Ansible, dans le MEME job : la cle privee et le mot de passe RDS ne
+# quittent jamais le systeme de fichiers ephemere de ce job (pas d'artifact
+# GitLab telechargeable, meme de facon temporaire).
+# TF_ENV_PREFIX designe l'environnement cible (app ou staging) : tous les
+# outputs Terraform necessaires sont derives de ce prefixe. Chaque job ne
+# cible qu'UN environnement a la fois - staging est teste avant que prod
+# ne soit mise a jour.
+# Le mot de passe RDS (genere par random_password) peut contenir des
+# caracteres speciaux ($, !, (), etc.) : on construit les extra-vars via un
+# fichier JSON genere par jq plutot que des "-e cle=valeur" en ligne de
+# commande, pour eviter tout risque de corruption/injection shell.
 .t_ansible_deploy:
   extends: .tf_image
   stage: deploy
@@ -204,26 +208,38 @@ build_ghost_image:
       optional: true
     - job: build_ghost_image
   before_script:
-    - apk add --no-cache ansible openssh-client
+    - apk add --no-cache ansible openssh-client jq
   script:
     - cd $TF_DIR
     - !reference [.tf_backend_init, script]
-    - terraform output -raw $TF_OUTPUT_IP > ../../target_ip.txt
+    - terraform output -raw ${TF_ENV_PREFIX}_public_ip > ../../target_ip.txt
+    - terraform output -raw ${TF_ENV_PREFIX}_db_host > ../../db_host.txt
+    - terraform output -raw ${TF_ENV_PREFIX}_db_port > ../../db_port.txt
+    - terraform output -raw ${TF_ENV_PREFIX}_db_name > ../../db_name.txt
+    - terraform output -raw ${TF_ENV_PREFIX}_db_user > ../../db_user.txt
+    - terraform output -raw ${TF_ENV_PREFIX}_db_password > ../../db_password.txt
     - terraform output -raw app_ssh_private_key > ../../ssh_key.pem
     - chmod 600 ../../ssh_key.pem
     - cd ../..
     - >
-      if [ ! -s target_ip.txt ]; then
-        echo "IP manquante : l'instance n'existe pas (lancer deploy_app_infra d'abord)."
+      if [ ! -s target_ip.txt ] || [ ! -s db_host.txt ]; then
+        echo "IP ou base de donnees manquante : verifier deploy_app_infra et deploy_data."
         exit 1
       fi
     - >
-      ansible-playbook -i "$(cat target_ip.txt)," -u ubuntu --private-key ssh_key.pem
-      app/ansible/playbook.yml
-      -e ghost_app_image_tag=$CI_COMMIT_SHORT_SHA
-      -e ghost_app_registry_url=$CI_REGISTRY
-      -e ghost_app_registry_user=$CI_REGISTRY_USER
-      -e ghost_app_registry_password=$CI_REGISTRY_PASSWORD
+      jq -n
+      --arg image_tag "$CI_COMMIT_SHORT_SHA"
+      --arg registry_url "$CI_REGISTRY"
+      --arg registry_user "$CI_REGISTRY_USER"
+      --arg registry_password "$CI_REGISTRY_PASSWORD"
+      --arg db_host "$(cat db_host.txt)"
+      --argjson db_port "$(cat db_port.txt)"
+      --arg db_name "$(cat db_name.txt)"
+      --arg db_user "$(cat db_user.txt)"
+      --arg db_password "$(cat db_password.txt)"
+      '{ghost_app_image_tag:$image_tag,ghost_app_registry_url:$registry_url,ghost_app_registry_user:$registry_user,ghost_app_registry_password:$registry_password,ghost_app_db_host:$db_host,ghost_app_db_port:$db_port,ghost_app_db_name:$db_name,ghost_app_db_user:$db_user,ghost_app_db_password:$db_password}'
+      > extra_vars.json
+    - ansible-playbook -i "$(cat target_ip.txt)," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml -e @extra_vars.json
 
 # Continuous Delivery : chaque push livre automatiquement la nouvelle image
 # sur staging, sans creer ni couter d'infra supplementaire (l'instance doit
@@ -232,7 +248,7 @@ build_ghost_image:
 deliver_staging:
   extends: .t_ansible_deploy
   variables:
-    TF_OUTPUT_IP: staging_public_ip
+    TF_ENV_PREFIX: staging
   environment:
     name: staging
   resource_group: app_infra
@@ -249,7 +265,7 @@ deliver_staging:
 deploy_prod:
   extends: .t_ansible_deploy
   variables:
-    TF_OUTPUT_IP: app_public_ip
+    TF_ENV_PREFIX: app
   environment:
     name: app
   resource_group: app_infra
