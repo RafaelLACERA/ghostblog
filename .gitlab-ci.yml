@@ -94,6 +94,11 @@ deploy_app_infra:
   environment:
     name: app
     action: start
+  # Empeche ce job de tourner en meme temps que destroy_app_infra/
+  # deliver_staging/deploy_prod (meme instances cibles) : GitLab met les
+  # jobs partageant ce resource_group en file d'attente au lieu de les
+  # laisser tourner en parallele.
+  resource_group: app_infra
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -103,7 +108,7 @@ deploy_app_infra:
 
 # Couche persistante (VPC, subnets, security group) : jamais detruite par le
 # cycle de test EC2 (deploy_app_infra/destroy_app_infra), volontairement
-# separee dans son propre state. Manuel et rare.
+# separee dans son propre state. L'utilsai
 deploy_data:
   extends: .t_terraform_deploy
   variables:
@@ -138,6 +143,7 @@ destroy_app_infra:
   environment:
     name: app
     action: stop
+  resource_group: app_infra
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -229,6 +235,7 @@ deliver_staging:
     TF_OUTPUT_IP: staging_public_ip
   environment:
     name: staging
+  resource_group: app_infra
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -245,6 +252,7 @@ deploy_prod:
     TF_OUTPUT_IP: app_public_ip
   environment:
     name: app
+  resource_group: app_infra
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
