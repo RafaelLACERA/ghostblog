@@ -1,4 +1,13 @@
 ---
+# Sur une instance fraichement demarree, cloud-init/unattended-upgrades
+# tournent en tache de fond et verrouillent apt/dpkg pendant un moment.
+# Sans cette attente, le premier "apt update" du role peut bloquer
+# plusieurs minutes en attendant ce verrou. cloud-init status --wait
+# bloque jusqu'a la toute fin du boot cloud-init, verrou compris.
+- name: Attendre la fin du boot cloud-init (evite les conflits de verrou apt)
+  ansible.builtin.command: cloud-init status --wait
+  changed_when: false
+
 # 1. Pare-feu (UFW)
 # Port 22 laisse ouvert a tous car le pipeline GitLab n'a pas d'IP fixe
 # (contrairement a un poste local classique)
