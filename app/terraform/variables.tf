@@ -10,8 +10,8 @@ variable "instance_type_app" {
   default     = "t3.micro"
 }
 
-variable "instance_type_preprod" {
-  description = "Type d'instance pour le serveur applicatif Ghost (preproduction)"
+variable "instance_type_staging" {
+  description = "Type d'instance pour le serveur applicatif Ghost (staging)"
   type        = string
   default     = "t3.micro"
 }

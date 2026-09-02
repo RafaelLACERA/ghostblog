@@ -5,15 +5,15 @@ Déploiement d'un blog **Ghost CMS** sur AWS, piloté de bout en bout via un pip
 ## Architecture
 
 - **Instance applicative unique** (AWS EC2 + Elastic IP) hébergeant Ghost via Docker Compose (MySQL 8.0 + Ghost).
-- **Environnements preprod / prod classiques**: deux instances EC2 distinctes prévues via le même module Terraform réutilisable (`app/terraform/modules/ec2-instance`) — à ce stade, seule l'instance de production est provisionnée.
+- **Environnements staging / prod classiques** (pas de Blue-Green) : deux instances EC2 distinctes provisionnées via le même module Terraform réutilisable (`app/terraform/modules/ec2-instance`), même security group et même clé SSH.
   - `ghost.lacera.fr` → production
-  - `preprod.lacera.fr` → préproduction (à venir)
+  - `staging.lacera.fr` → staging (DNS à venir)
 - **Instance de supervision séparée** (Prometheus/Grafana, à venir) dans le domaine `supervision/`.
 - DNS géré chez OVH.
 
 ## Structure du dépôt
 
-- `app/` : stack applicative (`docker-compose.yml`, `dockerfile`) et infrastructure Terraform (`app/terraform/`) de l'instance app.
+- `app/` : stack applicative (`docker-compose.yml`, `dockerfile`), infrastructure Terraform (`app/terraform/`) et rôles Ansible (`app/ansible/` : `hardening`, `docker`, `ghost_app`) provisionnant les instances prod et staging.
 - `supervision/` : infrastructure et configuration de la stack de supervision (en cours).
 - `.gitlab-ci.yml` : pipeline CI/CD (validation et déploiement Terraform, build de l'image Ghost).
 

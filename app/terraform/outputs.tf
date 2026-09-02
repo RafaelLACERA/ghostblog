@@ -19,17 +19,17 @@ output "app_ssh_private_key" {
   sensitive   = true
 }
 
-output "preprod_instance_id" {
-  description = "ID de l'instance de préproduction Ghost"
-  value       = module.preprod_instance.instance_id
+output "staging_instance_id" {
+  description = "ID de l'instance de staging Ghost"
+  value       = module.staging_instance.instance_id
 }
 
-output "preprod_public_ip" {
-  description = "IP publique fixe (Elastic IP) de l'instance de préproduction, à pointer via le DNS OVH"
-  value       = module.preprod_instance.public_ip
+output "staging_public_ip" {
+  description = "IP publique fixe (Elastic IP) de l'instance de staging, à pointer via le DNS OVH"
+  value       = module.staging_instance.public_ip
 }
 
-output "preprod_private_ip" {
-  description = "IP privée de l'instance de préproduction"
-  value       = module.preprod_instance.private_ip
+output "staging_private_ip" {
+  description = "IP privée de l'instance de staging"
+  value       = module.staging_instance.private_ip
 }
