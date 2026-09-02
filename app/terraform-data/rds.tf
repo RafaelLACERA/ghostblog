@@ -75,9 +75,12 @@ resource "aws_db_instance" "app" {
     Project = var.project_name
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # prevent_destroy temporairement retire (aucun contenu reel a proteger
+  # pour l'instant) : a remettre avant la prochaine fois que ces RDS
+  # contiendront de vraies donnees.
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
 
 resource "aws_db_instance" "staging" {
@@ -102,7 +105,10 @@ resource "aws_db_instance" "staging" {
     Project = var.project_name
   }
 
-  lifecycle {
-    prevent_destroy = true
-  }
+  # prevent_destroy temporairement retire (aucun contenu reel a proteger
+  # pour l'instant) : a remettre avant la prochaine fois que ces RDS
+  # contiendront de vraies donnees.
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
 }
