@@ -26,11 +26,11 @@ Déploiement d'un blog **Ghost CMS** sur AWS, piloté de bout en bout via un pip
 
 ## Démarrage rapide (local)
 
-Prérequis : Docker Engine + Docker Compose.
+Prérequis : Docker Engine + Docker Compose, et une base MySQL accessible (RDS en prod/staging ; en local, n'importe quel MySQL joignable via `DB_HOST`).
 
 ```bash
 cd app
-cp .env.example .env   # renseigner les secrets locaux
+cp .env.example .env   # renseigner DB_HOST/DB_USER/DB_PASSWORD/DB_NAME et les secrets locaux
 docker compose up -d --build
 ```
 

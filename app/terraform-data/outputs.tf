@@ -23,6 +23,16 @@ output "app_db_endpoint" {
   value       = aws_db_instance.app.endpoint
 }
 
+output "app_db_host" {
+  description = "Adresse DNS de la base de production (sans le port)"
+  value       = aws_db_instance.app.address
+}
+
+output "app_db_port" {
+  description = "Port de la base de production"
+  value       = aws_db_instance.app.port
+}
+
 output "app_db_username" {
   description = "Utilisateur de la base de production"
   value       = aws_db_instance.app.username
@@ -42,6 +52,16 @@ output "app_db_name" {
 output "staging_db_endpoint" {
   description = "Endpoint RDS de la base de staging"
   value       = aws_db_instance.staging.endpoint
+}
+
+output "staging_db_host" {
+  description = "Adresse DNS de la base de staging (sans le port)"
+  value       = aws_db_instance.staging.address
+}
+
+output "staging_db_port" {
+  description = "Port de la base de staging"
+  value       = aws_db_instance.staging.port
 }
 
 output "staging_db_username" {

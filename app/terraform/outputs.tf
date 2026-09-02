@@ -33,3 +33,59 @@ output "staging_private_ip" {
   description = "IP privée de l'instance de staging"
   value       = module.staging_instance.private_ip
 }
+
+# Relais des sorties RDS depuis le state persistant app-data : configure_app
+# (Ansible) ne lit que le state "app", ces outputs evitent d'avoir a
+# s'authentifier une deuxieme fois contre app-data depuis la CI.
+
+output "app_db_host" {
+  description = "Adresse DNS de la base de production"
+  value       = data.terraform_remote_state.data.outputs.app_db_host
+}
+
+output "app_db_port" {
+  description = "Port de la base de production"
+  value       = data.terraform_remote_state.data.outputs.app_db_port
+}
+
+output "app_db_name" {
+  description = "Nom de la base de production"
+  value       = data.terraform_remote_state.data.outputs.app_db_name
+}
+
+output "app_db_user" {
+  description = "Utilisateur de la base de production"
+  value       = data.terraform_remote_state.data.outputs.app_db_username
+}
+
+output "app_db_password" {
+  description = "Mot de passe de la base de production"
+  value       = data.terraform_remote_state.data.outputs.app_db_password
+  sensitive   = true
+}
+
+output "staging_db_host" {
+  description = "Adresse DNS de la base de staging"
+  value       = data.terraform_remote_state.data.outputs.staging_db_host
+}
+
+output "staging_db_port" {
+  description = "Port de la base de staging"
+  value       = data.terraform_remote_state.data.outputs.staging_db_port
+}
+
+output "staging_db_name" {
+  description = "Nom de la base de staging"
+  value       = data.terraform_remote_state.data.outputs.staging_db_name
+}
+
+output "staging_db_user" {
+  description = "Utilisateur de la base de staging"
+  value       = data.terraform_remote_state.data.outputs.staging_db_username
+}
+
+output "staging_db_password" {
+  description = "Mot de passe de la base de staging"
+  value       = data.terraform_remote_state.data.outputs.staging_db_password
+  sensitive   = true
+}

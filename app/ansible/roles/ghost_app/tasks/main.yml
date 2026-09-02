@@ -31,6 +31,9 @@
 
 - name: Tirer les images et demarrer la stack
   ansible.builtin.command:
-    cmd: docker compose up -d --pull always
+    # --remove-orphans nettoie les conteneurs d'un service qui a disparu du
+    # docker-compose.yml (ex: l'ancien ghost-db local, remplace par RDS) -
+    # docker compose up ne les supprime jamais tout seul sinon.
+    cmd: docker compose up -d --pull always --remove-orphans
     chdir: "{{ ghost_app_dir }}"
   changed_when: true

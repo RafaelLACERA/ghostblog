@@ -7,13 +7,13 @@ variable "aws_region" {
 variable "instance_type_app" {
   description = "Type d'instance pour le serveur applicatif Ghost (production)"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.small"
 }
 
 variable "instance_type_staging" {
   description = "Type d'instance pour le serveur applicatif Ghost (staging)"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.small"
 }
 
 variable "project_name" {

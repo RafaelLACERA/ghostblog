@@ -1,9 +1,10 @@
 ---
 ghost_app_dir: /opt/ghostblog
-ghost_app_mysql_database: ghost_db
-ghost_app_mysql_user: ghost_user
-ghost_app_mysql_password: ghost_password
-ghost_app_mysql_root_password: root_password
+ghost_app_db_host: ""
+ghost_app_db_port: 3306
+ghost_app_db_name: ghost_db
+ghost_app_db_user: ""
+ghost_app_db_password: ""
 ghost_app_url: "http://localhost:8090"
 ghost_app_image_tag: latest
 ghost_app_registry_url: ""
