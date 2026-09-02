@@ -105,6 +105,12 @@ deploy_app_infra:
         - app/terraform/**/*
         - app/ansible/**/*
       when: manual
+    # Pipeline lance a la main (bouton "Run pipeline" dans l'UI GitLab,
+    # accessible depuis un telephone) : rend le bouton disponible sans
+    # attendre qu'une MR touche les bons fichiers. Utile le jour de la
+    # soutenance, sans PC.
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
 
 # Couche persistante (VPC, subnets, security group) : jamais detruite par le
 # cycle de test EC2 (deploy_app_infra/destroy_app_infra), volontairement
@@ -122,6 +128,8 @@ deploy_data:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform-data/**/*
+      when: manual
+    - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
 
 # Job manuel de demontage complet, pour eviter de supprimer les ressources
@@ -150,6 +158,8 @@ destroy_app_infra:
         - app/terraform/**/*
         - app/ansible/**/*
       when: manual
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
 
 destroy_data:
   extends: .t_terraform_destroy
@@ -164,6 +174,8 @@ destroy_data:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform-data/**/*
+      when: manual
+    - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
 
 build_ghost_image:
@@ -183,6 +195,9 @@ build_ghost_image:
         - app/docker-compose.yml
         - app/ansible/**/*
         - app/terraform/**/*
+    # deliver_staging/deploy_prod en dependent (needs non-optionnel) : doit
+    # exister aussi sur un pipeline lance a la main.
+    - if: '$CI_PIPELINE_SOURCE == "web"'
 
 # Recupere IP + cle SSH + infos RDS depuis le state Terraform et lance
 # Ansible, dans le MEME job : la cle privee et le mot de passe RDS ne
@@ -262,6 +277,8 @@ deliver_staging:
         - app/ansible/**/*
         - app/dockerfile
         - app/docker-compose.yml
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
 
 # Manuel : promotion volontaire vers prod du meme tag d'image que celui
 # valide sur staging, jamais automatique.
@@ -279,6 +296,8 @@ deploy_prod:
         - app/ansible/**/*
         - app/dockerfile
         - app/docker-compose.yml
+      when: manual
+    - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
 
 tflint_app:
