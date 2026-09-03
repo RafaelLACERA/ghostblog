@@ -299,17 +299,22 @@ build_ghost_image:
   script:
     - cd $TF_DIR
     - !reference [.tf_backend_init, script]
-    - terraform output -raw ${TF_ENV_PREFIX}_public_ip > ../../../target_ip.txt
-    - terraform output -raw ${TF_ENV_PREFIX}_db_host > ../../../db_host.txt
-    - terraform output -raw ${TF_ENV_PREFIX}_db_port > ../../../db_port.txt
-    - terraform output -raw ${TF_ENV_PREFIX}_db_name > ../../../db_name.txt
-    - terraform output -raw ${TF_ENV_PREFIX}_db_user > ../../../db_user.txt
-    - terraform output -raw ${TF_ENV_PREFIX}_db_password > ../../../db_password.txt
+    # GitLab execute tout ce script comme un seul shell continu (le cd $TF_DIR
+    # plus haut reste actif ici) : pas besoin de fichiers intermediaires, les
+    # variables shell suffisent et restent valables apres le "cd ../../.."
+    # plus bas. Seule la cle SSH doit rester un vrai fichier (--private-key
+    # en a besoin).
+    - TARGET_IP=$(terraform output -raw ${TF_ENV_PREFIX}_public_ip)
+    - DB_HOST=$(terraform output -raw ${TF_ENV_PREFIX}_db_host)
+    - DB_PORT=$(terraform output -raw ${TF_ENV_PREFIX}_db_port)
+    - DB_NAME=$(terraform output -raw ${TF_ENV_PREFIX}_db_name)
+    - DB_USER=$(terraform output -raw ${TF_ENV_PREFIX}_db_user)
+    - DB_PASSWORD=$(terraform output -raw ${TF_ENV_PREFIX}_db_password)
     - terraform output -raw app_ssh_private_key > ../../../ssh_key.pem
     - chmod 600 ../../../ssh_key.pem
     - cd ../../..
     - >
-      if [ ! -s target_ip.txt ] || [ ! -s db_host.txt ]; then
+      if [ -z "$TARGET_IP" ] || [ -z "$DB_HOST" ]; then
         echo "IP ou base de donnees manquante : verifier deploy_app_infra et deploy_data."
         exit 1
       fi
@@ -319,15 +324,15 @@ build_ghost_image:
       --arg registry_url "$CI_REGISTRY"
       --arg registry_user "$CI_REGISTRY_USER"
       --arg registry_password "$CI_REGISTRY_PASSWORD"
-      --arg db_host "$(cat db_host.txt)"
-      --argjson db_port "$(cat db_port.txt)"
-      --arg db_name "$(cat db_name.txt)"
-      --arg db_user "$(cat db_user.txt)"
-      --arg db_password "$(cat db_password.txt)"
+      --arg db_host "$DB_HOST"
+      --argjson db_port "$DB_PORT"
+      --arg db_name "$DB_NAME"
+      --arg db_user "$DB_USER"
+      --arg db_password "$DB_PASSWORD"
       --arg ghost_url "$GHOST_URL"
       '{ghost_app_image_tag:$image_tag,ghost_app_registry_url:$registry_url,ghost_app_registry_user:$registry_user,ghost_app_registry_password:$registry_password,ghost_app_db_host:$db_host,ghost_app_db_port:$db_port,ghost_app_db_name:$db_name,ghost_app_db_user:$db_user,ghost_app_db_password:$db_password,ghost_app_url:$ghost_url}'
       > extra_vars.json
-    - ansible-playbook -i "$(cat target_ip.txt)," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml -e @extra_vars.json
+    - ansible-playbook -i "${TARGET_IP}," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml -e @extra_vars.json
 
 # Continuous Delivery : chaque push livre automatiquement la nouvelle image
 # sur staging, sans creer ni couter d'infra supplementaire (l'instance doit
