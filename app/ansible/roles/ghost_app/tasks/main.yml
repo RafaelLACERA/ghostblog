@@ -43,3 +43,18 @@
     cmd: docker compose up -d --pull always --remove-orphans
     chdir: "{{ ghost_app_dir }}"
   changed_when: true
+
+# Sans cette verification, le job reussit des que "docker compose up" a
+# demarre le conteneur, meme si Ghost plante juste apres (mauvaise config
+# DB, migration ratee...). Le healthcheck du docker-compose.yml existait
+# deja mais n'etait jamais consulte. start_period (30s) + interval (10s) *
+# retries (3) du healthcheck = jusqu'a ~60s avant le premier statut
+# definitif cote Docker, d'ou une marge de 90s ici.
+- name: Attendre que le conteneur Ghost soit en bonne sante
+  ansible.builtin.command:
+    cmd: "docker inspect --format {% raw %}'{{.State.Health.Status}}'{% endraw %} ghost"
+  register: ghost_app_health
+  until: ghost_app_health.stdout == "healthy"
+  retries: 18
+  delay: 5
+  changed_when: false
