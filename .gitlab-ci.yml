@@ -208,9 +208,11 @@ build_ghost_image:
     # --password-stdin plutot que -p : evite que le mot de passe apparaisse
     # dans les arguments du process docker (visible via "ps aux").
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA -t $CI_REGISTRY_IMAGE:latest -f app/dockerfile app
+    # Pas de tag :latest : le pipeline cible toujours une image par son SHA
+    # exact (extra_vars.json/.env), :latest ne serait jamais utilise en
+    # pratique et gonflerait le registry pour rien sur chaque MR.
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA -f app/dockerfile app
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
-    - docker push $CI_REGISTRY_IMAGE:latest
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
