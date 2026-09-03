@@ -8,18 +8,19 @@ Contrainte forte du projet : le jour de la soutenance, aucun poste personnel n'e
 
 - **Deux instances EC2** (+ Elastic IP), une par environnement (`app` = production, `staging`), provisionnées via le même module Terraform réutilisable (`app/terraform/instances/modules/ec2-instance`), même security group et même clé SSH — l'environnement de staging reste conforme à la prod.
 - **Deux bases RDS MySQL 8.0** séparées (une par environnement) : tester sur staging ne touche jamais aux données de prod.
-- **Deux states Terraform à cycles de vie distincts**, regroupés sous `app/terraform/` :
+- **Trois states Terraform à cycles de vie distincts**, regroupés sous `app/terraform/` :
   - `persistent/` : couche persistante (VPC, subnets, security group, RDS) — jamais détruite par les cycles de test des EC2.
   - `instances/` : instances EC2 prod/staging, jetables et recréées à chaque cycle de test, lisant le réseau via `terraform_remote_state`.
+  - `dns/` : enregistrements DNS OVH (`ghost.lacera.fr` / `ghost-staging.lacera.fr`), pointés vers les Elastic IP des instances — lit le state `instances` à distance, indépendant du cycle de vie des EC2 (survit à leur destruction/recréation).
+- **Nginx (reverse proxy) + Certbot (HTTPS via Let's Encrypt)** sur chaque instance, configurés par le rôle Ansible `nginx` — le domaine attendu est dérivé de la variable `GHOST_URL_APP`/`GHOST_URL_STAGING` (voir section Variables CI/CD).
 - **Instance de supervision séparée** (Prometheus/Grafana, à venir) dans le domaine `supervision/`.
-- DNS à venir chez OVH (`ghost.lacera.fr` / `ghost-staging.lacera.fr`).
 
 ## Structure du dépôt
 
 - `app/` :
   - `docker-compose.yml`, `dockerfile` : stack applicative Ghost (l'image se connecte à une base RDS externe, pas de MySQL en conteneur).
-  - `ansible/` : rôles `hardening` (pare-feu, durcissement SSH), `docker` (installation Docker Engine), `ghost_app` (déploiement du conteneur Ghost).
-  - `terraform/persistent/`, `terraform/instances/` : voir Architecture ci-dessus.
+  - `ansible/` : rôles `hardening` (pare-feu, durcissement SSH), `docker` (installation Docker Engine), `ghost_app` (déploiement du conteneur Ghost), `nginx` (reverse proxy + Certbot/HTTPS).
+  - `terraform/persistent/`, `terraform/instances/`, `terraform/dns/` : voir Architecture ci-dessus.
 - `supervision/` : infrastructure et configuration de la stack de supervision (pas encore commencé).
 - `.gitlab-ci.yml` : pipeline CI/CD, voir section dédiée ci-dessous.
 
@@ -38,10 +39,12 @@ Jobs manuels principaux :
 |---|---|
 | `deploy_data` | Crée/met à jour VPC, subnets, security group, RDS (`app/terraform/persistent`) |
 | `deploy_app_infra` | Crée/met à jour les EC2 prod + staging (`app/terraform/instances`) |
-| `deliver_staging` | Déploie l'image Ghost sur staging via Ansible (automatique sur push si les fichiers pertinents changent) |
-| `deploy_prod` | Promotion manuelle du même tag d'image vers la prod |
+| `deploy_dns` | Crée/met à jour les enregistrements DNS OVH (`app/terraform/dns`), doit être lancé après `deploy_app_infra` |
+| `deliver_staging` | Déploie l'image Ghost + Nginx/Certbot sur staging via Ansible (automatique sur push si les fichiers pertinents changent) |
+| `deploy_prod` | Promotion manuelle du même tag d'image vers la prod (+ Nginx/Certbot) |
 | `destroy_app_infra` | Détruit les EC2 (doit être lancé avant `destroy_data`) |
 | `destroy_data` | Détruit VPC/subnets/security group/RDS — bloqué automatiquement tant que des EC2 existent encore |
+| `destroy_dns` | Détruit les enregistrements DNS OVH |
 
 Ces boutons apparaissent selon deux logiques, qui coexistent :
 
@@ -60,14 +63,31 @@ Dans les deux cas, rien ne s'exécute sans un clic explicite sur le bouton du jo
 | `AWS_SECRET_ACCESS_KEY` | Authentification AWS | Non* | Oui |
 | `AWS_DEFAULT_REGION` | Région AWS (`eu-west-3`) | Non* | Non |
 | `SUPERVISION_IP_CIDR` | IP autorisée à scraper `node_exporter` (port 9100) | Non* | Non |
-| `GHOST_URL_APP` | URL publique de la prod, transmise à Ghost (`url` config) | Non* | Non |
-| `GHOST_URL_STAGING` | URL publique du staging | Non* | Non |
+| `GHOST_URL_APP` | URL publique de la prod (`https://ghost.lacera.fr`), transmise à Ghost (`url` config) et utilisée par le rôle `nginx` pour dériver le domaine du certificat Certbot | Non* | Non |
+| `GHOST_URL_STAGING` | URL publique du staging (`https://ghost-staging.lacera.fr`) | Non* | Non |
+| `OVH_ENDPOINT` | Endpoint API OVH (`ovh-eu`) | Non* | Non |
+| `OVH_APPLICATION_KEY` | Identifiant d'application OVH | Non* | Oui |
+| `OVH_APPLICATION_SECRET` | Secret d'application OVH | Non* | Oui |
+| `OVH_CONSUMER_KEY` | Clé consommateur OVH | Non* | Oui |
 
 *Non protégées volontairement : les jobs `deploy_*`/`destroy_*` tournent aussi sur les pipelines de Merge Request (branches non protégées), pas seulement sur `main`.
 
-`GHOST_URL_APP`/`GHOST_URL_STAGING` doivent toujours avoir une valeur (ex: `http://localhost:8090` en attendant le DNS) : une variable vide écraserait le défaut du rôle Ansible par une chaîne vide.
+`GHOST_URL_APP`/`GHOST_URL_STAGING` doivent toujours avoir une valeur valide (jamais vide) : une variable vide écraserait le défaut du rôle Ansible par une chaîne vide, et casserait la demande de certificat Certbot (domaine invalide).
+
+Les identifiants OVH (`OVH_APPLICATION_KEY`/`SECRET`/`OVH_CONSUMER_KEY`) se génèrent via https://api.ovh.com/createToken/, à restreindre idéalement aux chemins `/domain/zone/lacera.fr/*` (principe du moindre privilège).
 
 Le token GitLab (`CI_JOB_TOKEN`) et les credentials du Container Registry (`CI_REGISTRY*`) sont fournis automatiquement par GitLab, aucune configuration nécessaire.
+
+## Bootstrap DNS/HTTPS (une seule fois)
+
+L'ordre est important la première fois qu'on démarre une infra à partir de zéro (Certbot a besoin que le domaine résolve déjà vers l'instance pour valider son certificat) :
+
+1. `deploy_app_infra` (les EC2 doivent exister pour avoir une IP à pointer).
+2. `deploy_dns` — crée les enregistrements A vers les Elastic IP.
+3. Vérifier la propagation : `dig +short ghost.lacera.fr` / `dig +short ghost-staging.lacera.fr` doivent renvoyer les bonnes IP.
+4. `deliver_staging`/`deploy_prod` — le rôle `nginx` installe le reverse proxy et obtient le certificat HTTPS, maintenant que le domaine résout correctement.
+
+Si l'IP change (recréation des EC2 après un `destroy_app_infra`), relancer `deploy_dns` pour repointer le DNS avant de redéployer l'appli.
 
 ## Démarrage rapide (local)
 
@@ -93,7 +113,9 @@ docker compose up -d --build
 - **CMS** : Ghost 6 (image `ghost:6-alpine`)
 - **Base de données** : MySQL 8.0 (Amazon RDS)
 - **Conteneurisation** : Docker / Docker Compose
-- **Infrastructure as Code** : Terraform
+- **Infrastructure as Code** : Terraform (providers AWS + OVH)
 - **Configuration** : Ansible
 - **Cloud** : AWS (EC2, EIP, VPC, RDS)
+- **DNS** : OVH (`lacera.fr`)
+- **Reverse proxy / HTTPS** : Nginx + Certbot (Let's Encrypt)
 - **CI/CD** : GitLab CI/CD & GitLab Container Registry
