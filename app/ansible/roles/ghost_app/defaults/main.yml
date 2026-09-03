@@ -10,3 +10,4 @@ ghost_app_image_tag: latest
 ghost_app_registry_url: ""
 ghost_app_registry_user: ""
 ghost_app_registry_password: ""
+ghost_app_s3_bucket: ""

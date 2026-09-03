@@ -8,6 +8,7 @@ Contrainte forte du projet : le jour de la soutenance, aucun poste personnel n'e
 
 - **Deux instances EC2** (+ Elastic IP), une par environnement (`app` = production, `staging`), provisionnées via le même module Terraform réutilisable (`app/terraform/instances/modules/ec2-instance`), même security group et même clé SSH — l'environnement de staging reste conforme à la prod.
 - **Deux bases RDS MySQL 8.0** séparées (une par environnement) : tester sur staging ne touche jamais aux données de prod.
+- **Deux buckets S3** séparés (un par environnement) pour les médias Ghost (images uploadées, thèmes) via l'adaptateur `ghost-storage-adapter-s3` — sans ça, les uploads seraient perdus à chaque recréation des EC2 (contrairement à RDS, un volume Docker local ne survit pas à `destroy_app_infra`). Chaque instance accède à son bucket via un rôle IAM dédié (pas de clé AWS statique dans le conteneur).
 - **Trois states Terraform à cycles de vie distincts**, regroupés sous `app/terraform/` :
   - `persistent/` : couche persistante (VPC, subnets, security group, RDS) — jamais détruite par les cycles de test des EC2.
   - `instances/` : instances EC2 prod/staging, jetables et recréées à chaque cycle de test, lisant le réseau via `terraform_remote_state`.
@@ -107,6 +108,7 @@ docker compose up -d --build
 - Aucun secret n'est commité dans le dépôt (`.env`, clés, tokens sont dans `.gitignore`).
 - Les credentials AWS et variables sensibles sont gérées via les **variables CI/CD GitLab** (masquées).
 - La clé SSH des instances est générée par Terraform (`tls_private_key`) et lue directement depuis le state dans le job de déploiement — elle ne quitte jamais le système de fichiers éphémère du job (pas d'artifact GitLab téléchargeable).
+- Accès S3 via rôle IAM d'instance (pas de clé d'accès AWS statique dans le conteneur Ghost) — chaque rôle est scopé à son seul bucket.
 
 ## Stack technique
 
@@ -115,7 +117,7 @@ docker compose up -d --build
 - **Conteneurisation** : Docker / Docker Compose
 - **Infrastructure as Code** : Terraform (providers AWS + OVH)
 - **Configuration** : Ansible
-- **Cloud** : AWS (EC2, EIP, VPC, RDS)
+- **Cloud** : AWS (EC2, EIP, VPC, RDS, S3, IAM)
 - **DNS** : OVH (`lacera.fr`)
 - **Reverse proxy / HTTPS** : Nginx + Certbot (Let's Encrypt)
 - **CI/CD** : GitLab CI/CD & GitLab Container Registry
