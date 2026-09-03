@@ -1,9 +1,3 @@
-variable "project_name" {
-  description = "Nom du projet, utilisé pour le tagging des ressources"
-  type        = string
-  default     = "ghostblog"
-}
-
 variable "dns_zone" {
   description = "Zone DNS OVH dans laquelle creer les enregistrements"
   type        = string
