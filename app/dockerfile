@@ -28,8 +28,11 @@ RUN npm install ghost-storage-adapter-s3@2.8.0 --no-save && \
     mkdir -p content.orig/adapters/storage && \
     cp -r node_modules/ghost-storage-adapter-s3 content.orig/adapters/storage/s3
 
-# Optionnel :copier un thème personnalisé ici
-# COPY ./mon-theme-custom ./content/themes/mon-theme-custom
+# Optionnel : copier un theme personnalise ici. Cible content.orig/, pas
+# content/ (meme piege de volume que l'adaptateur S3 ci-dessus - voir le
+# commentaire plus haut) : l'entrypoint de l'image hydrate aussi chaque
+# theme individuellement depuis content.orig/themes/*.
+# COPY ./mon-theme-custom ./content.orig/themes/mon-theme-custom
 
 # On expose le port par défaut
 EXPOSE 2368
