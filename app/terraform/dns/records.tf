@@ -10,7 +10,7 @@ resource "ovh_domain_zone_record" "app" {
 
 resource "ovh_domain_zone_record" "staging" {
   zone      = var.dns_zone
-  subdomain = "staging"
+  subdomain = "ghost-staging"
   fieldtype = "A"
   ttl       = 60
   target    = data.terraform_remote_state.instances.outputs.staging_public_ip

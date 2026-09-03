@@ -12,7 +12,7 @@ Contrainte forte du projet : le jour de la soutenance, aucun poste personnel n'e
   - `persistent/` : couche persistante (VPC, subnets, security group, RDS) — jamais détruite par les cycles de test des EC2.
   - `instances/` : instances EC2 prod/staging, jetables et recréées à chaque cycle de test, lisant le réseau via `terraform_remote_state`.
 - **Instance de supervision séparée** (Prometheus/Grafana, à venir) dans le domaine `supervision/`.
-- DNS à venir chez OVH (`ghost.lacera.fr` / `staging.lacera.fr`).
+- DNS à venir chez OVH (`ghost.lacera.fr` / `ghost-staging.lacera.fr`).
 
 ## Structure du dépôt
 
