@@ -29,7 +29,8 @@
 # d'environnement REGISTRY_PASSWORD n'a pas ce probleme.
 - name: Authentification au registry GitLab Container Registry
   ansible.builtin.shell:
-    cmd: echo "$REGISTRY_PASSWORD" | docker login -u "{{ ghost_app_registry_user }}" --password-stdin "{{ ghost_app_registry_url }}"
+    cmd: set -o pipefail && echo "$REGISTRY_PASSWORD" | docker login -u "{{ ghost_app_registry_user }}" --password-stdin "{{ ghost_app_registry_url }}"
+    executable: /bin/bash
   environment:
     REGISTRY_PASSWORD: "{{ ghost_app_registry_password }}"
   no_log: true
@@ -42,6 +43,11 @@
     # docker compose up ne les supprime jamais tout seul sinon.
     cmd: docker compose up -d --pull always --remove-orphans
     chdir: "{{ ghost_app_dir }}"
+  # Toujours "changed" par simplification : parser la sortie de "docker
+  # compose up" pour distinguer un vrai changement d'un no-op est fragile
+  # (le format de sortie varie selon les versions de Docker Compose) et le
+  # cout de se tromper est nul ici (ce n'est pas utilise pour conditionner
+  # d'autres taches).
   changed_when: true
 
 # Sans cette verification, le job reussit des que "docker compose up" a

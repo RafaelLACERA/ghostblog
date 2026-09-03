@@ -16,6 +16,3 @@ WORKDIR /var/lib/ghost
 
 # On expose le port par défaut
 EXPOSE 2368
-
-# Commande de lancement par défaut de l'image parente
-CMD ["node", "current/index.js"]
