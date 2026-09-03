@@ -56,11 +56,30 @@
 # deja mais n'etait jamais consulte. start_period (30s) + interval (10s) *
 # retries (3) du healthcheck = jusqu'a ~60s avant le premier statut
 # definitif cote Docker, d'ou une marge de 90s ici.
-- name: Attendre que le conteneur Ghost soit en bonne sante
-  ansible.builtin.command:
-    cmd: "docker inspect --format {% raw %}'{{.State.Health.Status}}'{% endraw %} ghost"
-  register: ghost_app_health
-  until: ghost_app_health.stdout == "healthy"
-  retries: 18
-  delay: 5
-  changed_when: false
+- name: Verifier la sante de Ghost (avec diagnostic si echec)
+  block:
+    - name: Attendre que le conteneur Ghost soit en bonne sante
+      ansible.builtin.command:
+        cmd: "docker inspect --format {% raw %}'{{.State.Health.Status}}'{% endraw %} ghost"
+      register: ghost_app_health
+      until: ghost_app_health.stdout == "healthy"
+      retries: 18
+      delay: 5
+      changed_when: false
+  rescue:
+    # Sans ca, un echec ici ne donne aucune piste (juste "unhealthy") -
+    # les logs du conteneur montrent la vraie erreur (config invalide,
+    # crash au demarrage...).
+    - name: Recuperer les logs du conteneur Ghost pour diagnostic
+      ansible.builtin.command: docker logs --tail 100 ghost
+      register: ghost_app_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Afficher les logs recuperes
+      ansible.builtin.debug:
+        var: ghost_app_logs.stdout_lines
+
+    - name: Faire echouer la tache (le diagnostic ne doit pas masquer l'echec)
+      ansible.builtin.fail:
+        msg: "Ghost n'a jamais atteint l'etat 'healthy' - voir les logs Docker ci-dessus."
