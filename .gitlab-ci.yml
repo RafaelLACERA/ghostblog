@@ -116,7 +116,7 @@ deploy_app_infra:
 
 # Couche persistante (VPC, subnets, security group) : jamais detruite par le
 # cycle de test EC2 (deploy_app_infra/destroy_app_infra), volontairement
-# separee dans son propre state. L'utilsai
+# separee dans son propre state.
 deploy_data:
   extends: .t_terraform_deploy
   variables:
