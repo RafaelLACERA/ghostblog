@@ -23,9 +23,15 @@
     group: ubuntu
     mode: "0600"
 
+# --password-stdin plutot que -p : un mot de passe passe en argument de
+# ligne de commande reste visible (meme brievement) via "ps aux" pour
+# n'importe quel autre utilisateur de la machine. La variable
+# d'environnement REGISTRY_PASSWORD n'a pas ce probleme.
 - name: Authentification au registry GitLab Container Registry
-  ansible.builtin.command:
-    cmd: "docker login -u {{ ghost_app_registry_user }} -p {{ ghost_app_registry_password }} {{ ghost_app_registry_url }}"
+  ansible.builtin.shell:
+    cmd: echo "$REGISTRY_PASSWORD" | docker login -u "{{ ghost_app_registry_user }}" --password-stdin "{{ ghost_app_registry_url }}"
+  environment:
+    REGISTRY_PASSWORD: "{{ ghost_app_registry_password }}"
   no_log: true
   changed_when: false
 
