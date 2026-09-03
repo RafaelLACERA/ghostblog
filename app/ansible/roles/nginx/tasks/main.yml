@@ -1,0 +1,55 @@
+---
+- name: Deriver le domaine depuis ghost_app_url
+  ansible.builtin.set_fact:
+    nginx_domain: "{{ ghost_app_url | urlsplit('hostname') }}"
+
+- name: Installer nginx et certbot
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: true
+
+- name: Desactiver le site nginx par defaut
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Deployer la configuration du reverse proxy Ghost
+  ansible.builtin.template:
+    src: ghost.conf.j2
+    dest: /etc/nginx/sites-available/ghost.conf
+    mode: "0644"
+
+- name: Activer le site Ghost
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/ghost.conf
+    dest: /etc/nginx/sites-enabled/ghost.conf
+    state: link
+
+- name: Verifier la configuration nginx
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: Demarrer/recharger nginx et l'activer au boot
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+    enabled: true
+
+# --non-interactive/--agree-tos : pas d'invite pendant le pipeline. --redirect
+# force la redirection HTTP -> HTTPS une fois le certificat obtenu.
+# Idempotent : certbot ne redemande pas de certificat deja valide, et le
+# renouvellement auto est gere par le timer systemd installe avec le paquet
+# (pas besoin de le configurer nous-memes).
+# Prerequis : le domaine doit deja resoudre vers cette instance (voir
+# deploy_dns) pour que le challenge HTTP-01 de Let's Encrypt puisse valider.
+- name: Obtenir/renouveler le certificat HTTPS via Certbot
+  ansible.builtin.command:
+    cmd: >
+      certbot --nginx -d {{ nginx_domain }}
+      -m {{ nginx_certbot_email }}
+      --non-interactive --agree-tos --redirect
+  changed_when: true
