@@ -276,7 +276,8 @@ build_ghost_image:
       --arg db_name "$(cat db_name.txt)"
       --arg db_user "$(cat db_user.txt)"
       --arg db_password "$(cat db_password.txt)"
-      '{ghost_app_image_tag:$image_tag,ghost_app_registry_url:$registry_url,ghost_app_registry_user:$registry_user,ghost_app_registry_password:$registry_password,ghost_app_db_host:$db_host,ghost_app_db_port:$db_port,ghost_app_db_name:$db_name,ghost_app_db_user:$db_user,ghost_app_db_password:$db_password}'
+      --arg ghost_url "$GHOST_URL"
+      '{ghost_app_image_tag:$image_tag,ghost_app_registry_url:$registry_url,ghost_app_registry_user:$registry_user,ghost_app_registry_password:$registry_password,ghost_app_db_host:$db_host,ghost_app_db_port:$db_port,ghost_app_db_name:$db_name,ghost_app_db_user:$db_user,ghost_app_db_password:$db_password,ghost_app_url:$ghost_url}'
       > extra_vars.json
     - ansible-playbook -i "$(cat target_ip.txt)," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml -e @extra_vars.json
 
@@ -284,10 +285,15 @@ build_ghost_image:
 # sur staging, sans creer ni couter d'infra supplementaire (l'instance doit
 # deja exister). La mise en prod reste un choix manuel separe (deploy_prod) :
 # ce n'est pas du Continuous Deployment.
+# GHOST_URL_STAGING/GHOST_URL_APP (variables CI/CD GitLab, Settings > CI/CD >
+# Variables) doivent toujours avoir une valeur (ex: http://localhost:8090 en
+# attendant le DNS) : une variable vide ecraserait le defaut du role Ansible
+# par une chaine vide au lieu de le laisser s'appliquer.
 deliver_staging:
   extends: .t_ansible_deploy
   variables:
     TF_ENV_PREFIX: staging
+    GHOST_URL: $GHOST_URL_STAGING
   environment:
     name: staging
   resource_group: app_infra
@@ -307,6 +313,7 @@ deploy_prod:
   extends: .t_ansible_deploy
   variables:
     TF_ENV_PREFIX: app
+    GHOST_URL: $GHOST_URL_APP
   environment:
     name: app
   resource_group: app_infra
