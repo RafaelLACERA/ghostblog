@@ -22,8 +22,6 @@ services:
       storage__active: ${STORAGE_ACTIVE:-local}
       storage__s3__bucket: ${S3_BUCKET}
       storage__s3__region: ${AWS_DEFAULT_REGION:-eu-west-3}
-    volumes:
-      - ghost_content:/var/lib/ghost/content
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "2368"]
       interval: 10s
@@ -36,6 +34,3 @@ services:
 networks:
   ghost-net:
     driver: bridge
-
-volumes:
-  ghost_content:
