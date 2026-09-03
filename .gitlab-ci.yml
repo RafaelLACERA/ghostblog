@@ -116,12 +116,14 @@ deploy_app_infra:
         - app/terraform/instances/**/*
         - app/ansible/**/*
       when: manual
+      allow_failure: true
     # Pipeline lance a la main (bouton "Run pipeline" dans l'UI GitLab,
     # accessible depuis un telephone) : rend le bouton disponible sans
     # attendre qu'une MR touche les bons fichiers. Utile le jour de la
     # soutenance, sans PC.
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
+      allow_failure: true
 
 # Couche persistante (VPC, subnets, security group) : jamais detruite par le
 # cycle de test EC2 (deploy_app_infra/destroy_app_infra), volontairement
@@ -140,8 +142,10 @@ deploy_data:
       changes:
         - app/terraform/persistent/**/*
       when: manual
+      allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
+      allow_failure: true
 
 # Enregistrements DNS OVH (ghost.lacera.fr/staging.lacera.fr) : lit les IP
 # publiques dans le state "app" (instances EC2), doit donc etre lance apres
@@ -159,8 +163,10 @@ deploy_dns:
       changes:
         - app/terraform/dns/**/*
       when: manual
+      allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
+      allow_failure: true
 
 # Job manuel de demontage complet, pour eviter de supprimer les ressources
 # a la main dans la console AWS.
@@ -188,8 +194,10 @@ destroy_app_infra:
         - app/terraform/instances/**/*
         - app/ansible/**/*
       when: manual
+      allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
+      allow_failure: true
 
 destroy_data:
   extends: .t_terraform_destroy
@@ -224,8 +232,10 @@ destroy_data:
       changes:
         - app/terraform/persistent/**/*
       when: manual
+      allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
+      allow_failure: true
 
 destroy_dns:
   extends: .t_terraform_destroy
@@ -240,8 +250,10 @@ destroy_dns:
       changes:
         - app/terraform/dns/**/*
       when: manual
+      allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
+      allow_failure: true
 
 build_ghost_image:
   stage: build
@@ -361,6 +373,7 @@ deliver_staging:
         - app/docker-compose.yml
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
+      allow_failure: true
 
 # Manuel : promotion volontaire vers prod du meme tag d'image que celui
 # valide sur staging, jamais automatique.
@@ -380,8 +393,10 @@ deploy_prod:
         - app/dockerfile
         - app/docker-compose.yml
       when: manual
+      allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
+      allow_failure: true
 
 tflint_app:
   stage: test
