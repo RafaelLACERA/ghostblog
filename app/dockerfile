@@ -15,9 +15,18 @@ WORKDIR /var/lib/ghost
 # ainsi a la destruction/recreation de l'instance EC2 (voir bucket S3 dans
 # app/terraform/persistent). Version figee comme les autres dependances du
 # projet. https://github.com/colinmeinke/ghost-storage-adapter-s3
+#
+# Piege : l'image ghost:6-alpine declare VOLUME /var/lib/ghost/content dans
+# son propre Dockerfile - un volume herite comme ca ne peut pas etre retire
+# par une image fille, et Docker cree un volume anonyme dessus a CHAQUE
+# demarrage de conteneur, qui masquerait tout ce qu'on copierait dans
+# content/ au moment du build. La bonne cible est content.orig/ : c'est
+# l'entrypoint officiel de l'image (docker-entrypoint.sh) qui copie tout
+# ce qui manque de content.orig/ vers le vrai content/ (le volume) au
+# demarrage, avant de lancer Ghost - mecanisme prevu pour exactement ce cas.
 RUN npm install ghost-storage-adapter-s3@2.8.0 --no-save && \
-    mkdir -p content/adapters/storage && \
-    cp -r node_modules/ghost-storage-adapter-s3 content/adapters/storage/s3
+    mkdir -p content.orig/adapters/storage && \
+    cp -r node_modules/ghost-storage-adapter-s3 content.orig/adapters/storage/s3
 
 # Optionnel :copier un thème personnalisé ici
 # COPY ./mon-theme-custom ./content/themes/mon-theme-custom
