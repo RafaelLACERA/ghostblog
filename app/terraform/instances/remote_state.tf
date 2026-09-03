@@ -1,6 +1,6 @@
 # Lecture du state persistant (VPC, subnets, security group) gere dans
-# app/terraform-data/. Ce state (app) ne contient plus que les instances EC2,
-# jetables et recreees a chaque cycle de test, sans jamais toucher au reseau.
+# app/terraform/persistent/. Ce state (app) ne contient plus que les instances
+# EC2, jetables et recreees a chaque cycle de test, sans jamais toucher au reseau.
 data "terraform_remote_state" "data" {
   backend = "http"
 

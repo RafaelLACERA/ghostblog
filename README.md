@@ -6,11 +6,11 @@ Contrainte forte du projet : le jour de la soutenance, aucun poste personnel n'e
 
 ## Architecture
 
-- **Deux instances EC2** (+ Elastic IP), une par environnement (`app` = production, `staging`), provisionnées via le même module Terraform réutilisable (`app/terraform/modules/ec2-instance`), même security group et même clé SSH — l'environnement de staging reste conforme à la prod.
+- **Deux instances EC2** (+ Elastic IP), une par environnement (`app` = production, `staging`), provisionnées via le même module Terraform réutilisable (`app/terraform/instances/modules/ec2-instance`), même security group et même clé SSH — l'environnement de staging reste conforme à la prod.
 - **Deux bases RDS MySQL 8.0** séparées (une par environnement) : tester sur staging ne touche jamais aux données de prod.
-- **Deux states Terraform à cycles de vie distincts** :
-  - `app/terraform-data/` : couche persistante (VPC, subnets, security group, RDS) — jamais détruite par les cycles de test des EC2.
-  - `app/terraform/` : instances EC2 prod/staging, jetables et recréées à chaque cycle de test, lisant le réseau via `terraform_remote_state`.
+- **Deux states Terraform à cycles de vie distincts**, regroupés sous `app/terraform/` :
+  - `persistent/` : couche persistante (VPC, subnets, security group, RDS) — jamais détruite par les cycles de test des EC2.
+  - `instances/` : instances EC2 prod/staging, jetables et recréées à chaque cycle de test, lisant le réseau via `terraform_remote_state`.
 - **Instance de supervision séparée** (Prometheus/Grafana, à venir) dans le domaine `supervision/`.
 - DNS à venir chez OVH (`ghost.lacera.fr` / `staging.lacera.fr`).
 
@@ -19,7 +19,7 @@ Contrainte forte du projet : le jour de la soutenance, aucun poste personnel n'e
 - `app/` :
   - `docker-compose.yml`, `dockerfile` : stack applicative Ghost (l'image se connecte à une base RDS externe, pas de MySQL en conteneur).
   - `ansible/` : rôles `hardening` (pare-feu, durcissement SSH), `docker` (installation Docker Engine), `ghost_app` (déploiement du conteneur Ghost).
-  - `terraform-data/`, `terraform/` : voir Architecture ci-dessus.
+  - `terraform/persistent/`, `terraform/instances/` : voir Architecture ci-dessus.
 - `supervision/` : infrastructure et configuration de la stack de supervision (pas encore commencé).
 - `.gitlab-ci.yml` : pipeline CI/CD, voir section dédiée ci-dessous.
 
@@ -36,8 +36,8 @@ Jobs manuels principaux :
 
 | Job | Rôle |
 |---|---|
-| `deploy_data` | Crée/met à jour VPC, subnets, security group, RDS (`app/terraform-data`) |
-| `deploy_app_infra` | Crée/met à jour les EC2 prod + staging (`app/terraform`) |
+| `deploy_data` | Crée/met à jour VPC, subnets, security group, RDS (`app/terraform/persistent`) |
+| `deploy_app_infra` | Crée/met à jour les EC2 prod + staging (`app/terraform/instances`) |
 | `deliver_staging` | Déploie l'image Ghost sur staging via Ansible (automatique sur push si les fichiers pertinents changent) |
 | `deploy_prod` | Promotion manuelle du même tag d'image vers la prod |
 | `destroy_app_infra` | Détruit les EC2 (doit être lancé avant `destroy_data`) |
