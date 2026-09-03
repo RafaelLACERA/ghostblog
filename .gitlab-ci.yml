@@ -73,6 +73,15 @@ terraform_validate_data:
       changes:
         - app/terraform/persistent/**/*
 
+terraform_validate_dns:
+  extends: .t_terraform_validate
+  variables:
+    TF_DIR: app/terraform/dns
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/dns/**/*
+
 # Job manuel unique (bouton GitLab) : fmt -> init -> validate -> plan -> apply.
 # GitLab arrete le job a la premiere commande en echec (ex: plan invalide),
 # l'apply ne s'execute donc jamais si une etape precedente a echouer
@@ -130,6 +139,25 @@ deploy_data:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/persistent/**/*
+      when: manual
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+
+# Enregistrements DNS OVH (ghost.lacera.fr/staging.lacera.fr) : lit les IP
+# publiques dans le state "app" (instances EC2), doit donc etre lance apres
+# deploy_app_infra.
+deploy_dns:
+  extends: .t_terraform_deploy
+  variables:
+    TF_DIR: app/terraform/dns
+    TF_STATE_NAME: app-dns
+  environment:
+    name: dns
+    action: start
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/dns/**/*
       when: manual
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
@@ -195,6 +223,22 @@ destroy_data:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/persistent/**/*
+      when: manual
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+
+destroy_dns:
+  extends: .t_terraform_destroy
+  variables:
+    TF_DIR: app/terraform/dns
+    TF_STATE_NAME: app-dns
+  environment:
+    name: dns
+    action: stop
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/dns/**/*
       when: manual
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
@@ -357,6 +401,19 @@ tflint_data:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/persistent/**/*
+
+tflint_dns:
+  stage: test
+  image:
+    name: ghcr.io/terraform-linters/tflint:latest
+    entrypoint: [""]
+  script:
+    - cd app/terraform/dns
+    - tflint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/dns/**/*
 
 hadolint_dockerfile:
   stage: test
