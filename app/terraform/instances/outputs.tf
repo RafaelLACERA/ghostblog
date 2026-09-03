@@ -89,3 +89,13 @@ output "staging_db_password" {
   value       = data.terraform_remote_state.data.outputs.staging_db_password
   sensitive   = true
 }
+
+output "app_s3_bucket" {
+  description = "Bucket S3 des medias de production"
+  value       = data.terraform_remote_state.data.outputs.app_s3_bucket_name
+}
+
+output "staging_s3_bucket" {
+  description = "Bucket S3 des medias de staging"
+  value       = data.terraform_remote_state.data.outputs.staging_s3_bucket_name
+}

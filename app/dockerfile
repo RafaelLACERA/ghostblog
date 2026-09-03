@@ -11,6 +11,14 @@ RUN apk update && apk upgrade --no-cache
 
 WORKDIR /var/lib/ghost
 
+# Adaptateur de stockage S3 : les medias uploades (images, themes) survivent
+# ainsi a la destruction/recreation de l'instance EC2 (voir bucket S3 dans
+# app/terraform/persistent). Version figee comme les autres dependances du
+# projet. https://github.com/colinmeinke/ghost-storage-adapter-s3
+RUN npm install ghost-storage-adapter-s3@2.8.0 --no-save && \
+    mkdir -p content/adapters/storage && \
+    cp -r node_modules/ghost-storage-adapter-s3 content/adapters/storage/s3
+
 # Optionnel :copier un thème personnalisé ici
 # COPY ./mon-theme-custom ./content/themes/mon-theme-custom
 

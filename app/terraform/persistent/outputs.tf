@@ -79,3 +79,23 @@ output "staging_db_name" {
   description = "Nom de la base de staging"
   value       = aws_db_instance.staging.db_name
 }
+
+output "app_s3_bucket_name" {
+  description = "Nom du bucket S3 des medias de production"
+  value       = aws_s3_bucket.app.id
+}
+
+output "staging_s3_bucket_name" {
+  description = "Nom du bucket S3 des medias de staging"
+  value       = aws_s3_bucket.staging.id
+}
+
+output "app_iam_instance_profile_name" {
+  description = "Nom du profil IAM a attacher a l'instance de production (acces S3)"
+  value       = aws_iam_instance_profile.app_storage.name
+}
+
+output "staging_iam_instance_profile_name" {
+  description = "Nom du profil IAM a attacher a l'instance de staging (acces S3)"
+  value       = aws_iam_instance_profile.staging_storage.name
+}

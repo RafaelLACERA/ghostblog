@@ -310,6 +310,7 @@ build_ghost_image:
     - DB_NAME=$(terraform output -raw ${TF_ENV_PREFIX}_db_name)
     - DB_USER=$(terraform output -raw ${TF_ENV_PREFIX}_db_user)
     - DB_PASSWORD=$(terraform output -raw ${TF_ENV_PREFIX}_db_password)
+    - S3_BUCKET=$(terraform output -raw ${TF_ENV_PREFIX}_s3_bucket)
     - terraform output -raw app_ssh_private_key > ../../../ssh_key.pem
     - chmod 600 ../../../ssh_key.pem
     - cd ../../..
@@ -330,7 +331,8 @@ build_ghost_image:
       --arg db_user "$DB_USER"
       --arg db_password "$DB_PASSWORD"
       --arg ghost_url "$GHOST_URL"
-      '{ghost_app_image_tag:$image_tag,ghost_app_registry_url:$registry_url,ghost_app_registry_user:$registry_user,ghost_app_registry_password:$registry_password,ghost_app_db_host:$db_host,ghost_app_db_port:$db_port,ghost_app_db_name:$db_name,ghost_app_db_user:$db_user,ghost_app_db_password:$db_password,ghost_app_url:$ghost_url}'
+      --arg s3_bucket "$S3_BUCKET"
+      '{ghost_app_image_tag:$image_tag,ghost_app_registry_url:$registry_url,ghost_app_registry_user:$registry_user,ghost_app_registry_password:$registry_password,ghost_app_db_host:$db_host,ghost_app_db_port:$db_port,ghost_app_db_name:$db_name,ghost_app_db_user:$db_user,ghost_app_db_password:$db_password,ghost_app_url:$ghost_url,ghost_app_s3_bucket:$s3_bucket}'
       > extra_vars.json
     - ansible-playbook -i "${TARGET_IP}," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml -e @extra_vars.json
 

@@ -33,3 +33,8 @@ variable "project_name" {
   description = "Nom du projet, utilisé pour le tagging des ressources"
   type        = string
 }
+
+variable "iam_instance_profile" {
+  description = "Nom du profil IAM a attacher a l'instance (acces S3)"
+  type        = string
+}
