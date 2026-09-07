@@ -292,6 +292,8 @@ build_ghost_image:
 # caracteres speciaux ($, !, (), etc.) : on construit les extra-vars via un
 # fichier JSON genere par jq plutot que des "-e cle=valeur" en ligne de
 # commande, pour eviter tout risque de corruption/injection shell.
+# Technique jq (--arg/--argjson pour echapper proprement chaque valeur)
+# elaboree avec l'aide de Claude Code et Gemini.
 .t_ansible_deploy:
   extends: .tf_image
   stage: deploy
@@ -449,7 +451,10 @@ hadolint_dockerfile:
       changes:
         - app/dockerfile
 
-# Scan de vulnerabilites (CVE) sur l'image Ghost buildee. exit-code 0 
+# Scan de vulnerabilites (CVE) sur l'image Ghost buildee. Rapport complet
+# HIGH+CRITICAL en exit-code 0 (informatif, jamais bloquant), puis un
+# deuxieme passage cible uniquement sur CRITICAL en exit-code 1 : si une
+# faille critique apparait, le job echoue et bloque le pipeline.
 scan_ghost_image:
   stage: test
   image:
@@ -462,6 +467,7 @@ scan_ghost_image:
     - build_ghost_image
   script:
     - trivy image --exit-code 0 --severity CRITICAL,HIGH $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    - trivy image --exit-code 1 --severity CRITICAL $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
