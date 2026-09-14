@@ -18,6 +18,11 @@ output "app_security_group_id" {
   value       = aws_security_group.app.id
 }
 
+output "supervision_security_group_id" {
+  description = "ID du security group de l'instance de supervision"
+  value       = aws_security_group.supervision.id
+}
+
 output "app_db_endpoint" {
   description = "Endpoint RDS de la base de production (host:port)"
   value       = aws_db_instance.app.endpoint
