@@ -1,16 +1,13 @@
 ---
-# Sur une instance fraichement demarree, cloud-init/unattended-upgrades
-# tournent en tache de fond et verrouillent apt/dpkg pendant un moment.
-# Sans cette attente, le premier "apt update" du role peut bloquer
-# plusieurs minutes en attendant ce verrou. cloud-init status --wait
-# bloque jusqu'a la toute fin du boot cloud-init, verrou compris.
+# Copie adaptee de app/ansible/roles/hardening (duplique volontairement,
+# pas partage : cycle de vie totalement independant de l'instance
+# supervision par rapport a app/staging).
 - name: Attendre la fin du boot cloud-init (evite les conflits de verrou apt)
   ansible.builtin.command: cloud-init status --wait
   changed_when: false
 
 # 1. Pare-feu (UFW)
-# Port 22 laisse ouvert a tous car le pipeline GitLab n'a pas d'IP fixe
-# (contrairement a un poste local classique)
+# Port 22 laisse ouvert a tous car le pipeline GitLab n'a pas d'IP fixe.
 - name: Mettre a jour le cache apt
   ansible.builtin.apt:
     update_cache: true
@@ -37,15 +34,6 @@
   community.general.ufw:
     rule: allow
     port: "443"
-    proto: tcp
-
-# Le security group AWS restreint deja ce port a l'IP privee de l'instance
-# supervision (var.supervision_ip_cidr) : pas de restriction supplementaire
-# ici, meme logique que le port 22 ci-dessus (le vrai filtre est le SG).
-- name: Autoriser node_exporter dans UFW (scrape par l'instance supervision)
-  community.general.ufw:
-    rule: allow
-    port: "9100"
     proto: tcp
 
 - name: Activer UFW avec politique par defaut deny en entree

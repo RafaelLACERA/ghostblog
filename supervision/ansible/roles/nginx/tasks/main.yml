@@ -1,0 +1,48 @@
+---
+- name: Installer nginx et certbot
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: true
+
+- name: Desactiver le site nginx par defaut
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Deployer la configuration du reverse proxy Grafana
+  ansible.builtin.template:
+    src: monitoring.conf.j2
+    dest: /etc/nginx/sites-available/monitoring.conf
+    mode: "0644"
+
+- name: Activer le site monitoring
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/monitoring.conf
+    dest: /etc/nginx/sites-enabled/monitoring.conf
+    state: link
+
+- name: Verifier la configuration nginx
+  ansible.builtin.command: nginx -t
+  changed_when: false
+
+- name: Demarrer/recharger nginx et l'activer au boot
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+    enabled: true
+
+# Meme logique que app/ansible/roles/nginx : idempotent, renouvellement
+# auto gere par le timer systemd du paquet certbot. Le domaine doit deja
+# resoudre vers cette instance (voir deploy_dns) pour que le challenge
+# HTTP-01 puisse valider.
+- name: Obtenir/renouveler le certificat HTTPS via Certbot
+  ansible.builtin.command:
+    cmd: >
+      certbot --nginx -d {{ nginx_domain }}
+      -m {{ nginx_certbot_email }}
+      --non-interactive --agree-tos --redirect
+  changed_when: true

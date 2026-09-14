@@ -1,0 +1,87 @@
+---
+- name: Creer les repertoires de l'application
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+  loop:
+    - "{{ monitoring_dir }}"
+    - "{{ monitoring_dir }}/grafana/provisioning/datasources"
+    - "{{ monitoring_dir }}/grafana/provisioning/dashboards"
+    - "{{ monitoring_dir }}/grafana/dashboards"
+
+- name: Deployer le docker-compose.yml
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ monitoring_dir }}/docker-compose.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+
+- name: Deployer la configuration Prometheus
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ monitoring_dir }}/prometheus.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+
+- name: Provisionner la datasource Grafana (Prometheus, automatique au demarrage)
+  ansible.builtin.template:
+    src: datasource.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/datasource.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+
+- name: Provisionner le fournisseur de dashboards Grafana
+  ansible.builtin.template:
+    src: dashboards.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/dashboards.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+
+- name: Copier le dashboard node_exporter pre-construit
+  ansible.builtin.copy:
+    src: dashboard-node-exporter.json
+    dest: "{{ monitoring_dir }}/grafana/dashboards/dashboard-node-exporter.json"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+
+- name: Tirer les images et demarrer la stack
+  ansible.builtin.command:
+    cmd: docker compose up -d --pull always --remove-orphans
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
+# Meme logique que ghost_app : ne pas se contenter de "le conteneur a
+# demarre", verifier que Grafana repond vraiment avant de considerer le
+# deploiement reussi.
+- name: Verifier la sante de Grafana (avec diagnostic si echec)
+  block:
+    - name: Attendre que l'API de sante Grafana reponde
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:3000/api/health"
+        status_code: 200
+      register: monitoring_grafana_health
+      until: monitoring_grafana_health.status == 200
+      retries: 18
+      delay: 5
+  rescue:
+    - name: Recuperer les logs du conteneur Grafana pour diagnostic
+      ansible.builtin.command: docker logs --tail 100 grafana
+      register: monitoring_grafana_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Afficher les logs recuperes
+      ansible.builtin.debug:
+        var: monitoring_grafana_logs.stdout_lines
+
+    - name: Faire echouer la tache (le diagnostic ne doit pas masquer l'echec)
+      ansible.builtin.fail:
+        msg: "Grafana n'a jamais repondu sur /api/health - voir les logs Docker ci-dessus."
