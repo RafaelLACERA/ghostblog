@@ -1,0 +1,9 @@
+---
+monitoring_dir: /opt/supervision
+monitoring_grafana_admin_password: ""
+# "ip_privee:9100", injectes par extra-vars (voir .gitlab-ci.yml,
+# deploy_supervision_config) - vides par defaut si le state "app" n'existe
+# pas encore ou plus, auquel cas la cible correspondante est simplement
+# absente du scrape (pas d'echec).
+monitoring_app_target: ""
+monitoring_staging_target: ""

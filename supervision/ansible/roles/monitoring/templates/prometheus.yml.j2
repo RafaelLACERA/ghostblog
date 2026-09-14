@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+{% if monitoring_app_target %}
+  - job_name: app
+    static_configs:
+      - targets:
+          - "{{ monitoring_app_target }}"
+        labels:
+          env: app
+{% endif %}
+{% if monitoring_staging_target %}
+  - job_name: staging
+    static_configs:
+      - targets:
+          - "{{ monitoring_staging_target }}"
+        labels:
+          env: staging
+{% endif %}

@@ -15,3 +15,20 @@ resource "ovh_domain_zone_record" "staging" {
   ttl       = 60
   target    = data.terraform_remote_state.instances.outputs.staging_public_ip
 }
+
+locals {
+  # try() indispensable : le state "supervision" peut n'avoir jamais ete
+  # deploye ou avoir ete detruit (cycle de vie independant, volontairement
+  # pas de garde-fou bloquant ici, voir remote_state.tf).
+  supervision_public_ip = try(data.terraform_remote_state.supervision.outputs.supervision_public_ip, null)
+}
+
+resource "ovh_domain_zone_record" "monitoring" {
+  count = local.supervision_public_ip != null ? 1 : 0
+
+  zone      = var.dns_zone
+  subdomain = "monitoring"
+  fieldtype = "A"
+  ttl       = 60
+  target    = local.supervision_public_ip
+}

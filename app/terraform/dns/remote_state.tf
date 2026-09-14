@@ -23,3 +23,19 @@ data "terraform_remote_state" "instances" {
     }
   }
 }
+
+# Meme pattern pour le sous-domaine de l'instance de supervision, mais SANS
+# postcondition bloquante ici : contrairement a "instances" (obligatoire
+# pour ghost/ghost-staging), la supervision a un cycle de vie independant
+# et optionnel - deploy_dns doit continuer a fonctionner pour ghost.lacera.fr
+# meme si deploy_supervision n'a jamais tourne ou a ete detruit. Voir
+# records.tf : le record "monitoring" est cree seulement si l'IP existe.
+data "terraform_remote_state" "supervision" {
+  backend = "http"
+
+  config = {
+    address  = "${var.gitlab_api_url}/projects/${var.gitlab_project_id}/terraform/state/supervision"
+    username = "gitlab-ci-token"
+    password = var.gitlab_ci_job_token
+  }
+}

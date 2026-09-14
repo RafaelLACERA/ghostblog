@@ -1,0 +1,7 @@
+---
+nginx_certbot_email: "rafael.lacera@gmail.com"
+# Domaine complet (ex: monitoring.lacera.fr), fourni par extra-vars - pas
+# de derivation via urlsplit ici (contrairement a app/ansible/roles/nginx)
+# puisqu'on connait directement le nom de domaine, pas une URL Ghost.
+nginx_domain: ""
+nginx_proxy_port: 3000

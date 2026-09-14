@@ -443,6 +443,76 @@ deploy_prod:
       when: manual
       allow_failure: true
 
+# Configuration Ansible de l'instance de supervision (Prometheus/Grafana).
+# Pas d'extension de .t_ansible_deploy (specifique a Ghost : DB/S3/registry) :
+# job dedie, plus simple. Les IP privees app/staging sont recuperees en
+# "lookup souple" via l'API du state "app" (curl+jq, meme technique que le
+# garde-fou de destroy_data) plutot que via un data.terraform_remote_state -
+# volontaire, pour ne jamais faire echouer ce job si l'infra Ghost est
+# detruite (cycle de vie de la supervision totalement independant).
+# MONITORING_DOMAIN (variable CI/CD GitLab) : "monitoring.lacera.fr".
+# GRAFANA_ADMIN_PASSWORD (variable CI/CD GitLab, masquee) : mot de passe du
+# compte admin Grafana.
+deploy_supervision_config:
+  extends: .tf_image
+  stage: deploy
+  variables:
+    TF_DIR: supervision/terraform
+    TF_STATE_NAME: supervision
+    ANSIBLE_CONFIG: $CI_PROJECT_DIR/supervision/ansible/ansible.cfg
+  before_script:
+    - apk add --no-cache ansible openssh-client curl jq
+  script:
+    - cd $TF_DIR
+    - !reference [.tf_backend_init, script]
+    - TARGET_IP=$(terraform output -raw supervision_public_ip)
+    - terraform output -raw supervision_ssh_private_key > ../../ssh_key.pem
+    - chmod 600 ../../ssh_key.pem
+    - cd ../..
+    - >
+      if [ -z "$TARGET_IP" ]; then
+        echo "IP supervision manquante : verifier deploy_supervision."
+        exit 1
+      fi
+    - >
+      curl -sS -o app_state.json -w "HTTP %{http_code}\n"
+      -u "gitlab-ci-token:${CI_JOB_TOKEN}"
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/app"
+    - APP_IP=$(jq -r '.outputs.app_private_ip.value // empty' app_state.json)
+    - STAGING_IP=$(jq -r '.outputs.staging_private_ip.value // empty' app_state.json)
+    - >
+      if [ -z "$APP_IP" ]; then
+        echo "IP privee app introuvable (deploy_app_infra jamais lance ou state 'app' detruit) - cible ignoree."
+      fi
+    - >
+      if [ -z "$STAGING_IP" ]; then
+        echo "IP privee staging introuvable - cible ignoree."
+      fi
+    - APP_TARGET=""
+    - if [ -n "$APP_IP" ]; then APP_TARGET="${APP_IP}:9100"; fi
+    - STAGING_TARGET=""
+    - if [ -n "$STAGING_IP" ]; then STAGING_TARGET="${STAGING_IP}:9100"; fi
+    - >
+      ansible-playbook -i "${TARGET_IP}," -u ubuntu --private-key ssh_key.pem
+      supervision/ansible/playbook.yml
+      -e monitoring_grafana_admin_password="$GRAFANA_ADMIN_PASSWORD"
+      -e monitoring_app_target="$APP_TARGET"
+      -e monitoring_staging_target="$STAGING_TARGET"
+      -e nginx_domain="$MONITORING_DOMAIN"
+  environment:
+    name: supervision
+  resource_group: supervision
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - supervision/terraform/**/*
+        - supervision/ansible/**/*
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: true
+
 tflint_app:
   stage: test
   image:

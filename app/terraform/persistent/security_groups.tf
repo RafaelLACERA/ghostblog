@@ -50,10 +50,10 @@ resource "aws_security_group" "app" {
   }
 }
 
-# Instance de supervision (Prometheus/Grafana) : Grafana expose son UI web,
-# SSH pour l'administration. Pas de regle 9100 ici : c'est l'instance
-# supervision qui scrape *sortant* vers app/staging, jamais l'inverse (voir
-# la regle 9100 sur le SG "app" ci-dessus).
+# Instance de supervision (Prometheus/Grafana) : Grafana derriere Nginx+
+# Certbot (meme role que sur app/staging), SSH pour l'administration. Pas
+# de regle 9100 ici : c'est l'instance supervision qui scrape *sortant*
+# vers app/staging, jamais l'inverse (voir la regle 9100 sur le SG "app").
 resource "aws_security_group" "supervision" {
   name        = "${var.project_name}-supervision-sg"
   description = "Security group de l'instance de supervision (Prometheus/Grafana)"
@@ -69,11 +69,19 @@ resource "aws_security_group" "supervision" {
 
   # Ouvert au monde : impossible de connaitre a l'avance l'IP depuis
   # laquelle Grafana sera consulte le jour de la soutenance (poste
-  # impose sur place, reseau inconnu). Protection = mot de passe Grafana.
+  # impose sur place, reseau inconnu). HTTPS + mot de passe Grafana.
   ingress {
-    description = "Grafana - interface web"
-    from_port   = 3000
-    to_port     = 3000
+    description = "HTTP depuis internet (redirection Certbot vers HTTPS)"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTPS depuis internet - Grafana via Nginx"
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }

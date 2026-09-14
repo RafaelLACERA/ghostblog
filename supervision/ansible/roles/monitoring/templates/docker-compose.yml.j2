@@ -1,0 +1,45 @@
+services:
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: prometheus
+    restart: on-failure
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    # Loopback uniquement : Grafana (meme reseau Docker) lui parle par nom
+    # de service, personne d'autre n'a besoin d'atteindre Prometheus
+    # directement (pas de regle de security group pour le port 9090).
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - monitoring-net
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: grafana
+    restart: on-failure
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "{{ monitoring_grafana_admin_password }}"
+      GF_SERVER_ROOT_URL: "https://{{ nginx_domain | default('') }}"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - monitoring-net
+    depends_on:
+      - prometheus
+
+networks:
+  monitoring-net:
+    driver: bridge
+
+# Volumes locaux a l'instance (pas de persistance S3/EBS dediee) : voir
+# note dans le dossier de certification - metriques/dashboards perdus a un
+# destroy_supervision, limite assumee (observation temps reel pendant les
+# tests, pas d'historisation long terme).
+volumes:
+  prometheus_data:
+  grafana_data:

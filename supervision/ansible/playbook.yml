@@ -1,0 +1,9 @@
+---
+- name: Provisionner l'instance de supervision
+  hosts: all
+  become: true
+  roles:
+    - hardening
+    - docker
+    - monitoring
+    - nginx

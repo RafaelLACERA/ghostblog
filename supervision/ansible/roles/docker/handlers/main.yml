@@ -1,0 +1,4 @@
+---
+- name: Rafraichir le cache apt
+  ansible.builtin.apt:
+    update_cache: true
