@@ -23,11 +23,14 @@ locals {
   supervision_public_ip = try(data.terraform_remote_state.supervision.outputs.supervision_public_ip, null)
 }
 
+# "ghost-monitoring" et non "monitoring" tout court : la zone lacera.fr
+# n'est pas dediee a ghostblog (ex: portail VPN Sophos deja sur cette
+# meme zone) - prefixe explicite pour eviter toute ambiguite.
 resource "ovh_domain_zone_record" "monitoring" {
   count = local.supervision_public_ip != null ? 1 : 0
 
   zone      = var.dns_zone
-  subdomain = "monitoring"
+  subdomain = "ghost-monitoring"
   fieldtype = "A"
   ttl       = 60
   target    = local.supervision_public_ip
