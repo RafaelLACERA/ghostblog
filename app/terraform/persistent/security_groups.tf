@@ -56,7 +56,7 @@ resource "aws_security_group" "app" {
 # vers app/staging, jamais l'inverse (voir la regle 9100 sur le SG "app").
 resource "aws_security_group" "supervision" {
   name        = "${var.project_name}-supervision-sg"
-  description = "Security group de l'instance de supervision (Prometheus/Grafana)"
+  description = "Security group instance de supervision (Prometheus/Grafana)"
   vpc_id      = aws_vpc.main.id
 
   ingress {
