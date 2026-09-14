@@ -16,22 +16,18 @@ resource "ovh_domain_zone_record" "staging" {
   target    = data.terraform_remote_state.instances.outputs.staging_public_ip
 }
 
-locals {
-  # try() indispensable : le state "supervision" peut n'avoir jamais ete
-  # deploye ou avoir ete detruit (cycle de vie independant, volontairement
-  # pas de garde-fou bloquant ici, voir remote_state.tf).
-  supervision_public_ip = try(data.terraform_remote_state.supervision.outputs.supervision_public_ip, null)
-}
-
 # "ghost-monitoring" et non "monitoring" tout court : la zone lacera.fr
 # n'est pas dediee a ghostblog (ex: portail VPN Sophos deja sur cette
-# meme zone) - prefixe explicite pour eviter toute ambiguite.
+# meme zone) - prefixe explicite pour eviter toute ambiguite. IP recuperee
+# via un lookup souple cote CI (voir app/terraform/dns/variables.tf), pas
+# via terraform_remote_state - le state "supervision" peut n'avoir jamais
+# ete applique.
 resource "ovh_domain_zone_record" "monitoring" {
-  count = local.supervision_public_ip != null ? 1 : 0
+  count = var.supervision_public_ip != "" ? 1 : 0
 
   zone      = var.dns_zone
   subdomain = "ghost-monitoring"
   fieldtype = "A"
   ttl       = 60
-  target    = local.supervision_public_ip
+  target    = var.supervision_public_ip
 }
