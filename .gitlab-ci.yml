@@ -168,6 +168,29 @@ deploy_dns:
       when: manual
       allow_failure: true
 
+# Instance de supervision (Prometheus/Grafana) : lit le state "app-data"
+# (subnet, security group), cycle de vie totalement independant de
+# deploy_app_infra/deploy_data - resource_group dedie ci-dessous.
+deploy_supervision:
+  extends: .t_terraform_deploy
+  variables:
+    TF_DIR: supervision/terraform
+    TF_STATE_NAME: supervision
+  environment:
+    name: supervision
+    action: start
+  resource_group: supervision
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - supervision/terraform/**/*
+        - supervision/ansible/**/*
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: true
+
 # Job manuel de demontage complet, pour eviter de supprimer les ressources
 # a la main dans la console AWS.
 .t_terraform_destroy:
@@ -249,6 +272,26 @@ destroy_dns:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/dns/**/*
+      when: manual
+      allow_failure: true
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: true
+
+destroy_supervision:
+  extends: .t_terraform_destroy
+  variables:
+    TF_DIR: supervision/terraform
+    TF_STATE_NAME: supervision
+  environment:
+    name: supervision
+    action: stop
+  resource_group: supervision
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - supervision/terraform/**/*
+        - supervision/ansible/**/*
       when: manual
       allow_failure: true
     - if: '$CI_PIPELINE_SOURCE == "web"'
@@ -438,6 +481,19 @@ tflint_dns:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/dns/**/*
+
+tflint_supervision:
+  stage: test
+  image:
+    name: ghcr.io/terraform-linters/tflint:latest
+    entrypoint: [""]
+  script:
+    - cd supervision/terraform
+    - tflint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - supervision/terraform/**/*
 
 hadolint_dockerfile:
   stage: test
