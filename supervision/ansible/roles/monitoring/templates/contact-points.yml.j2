@@ -1,0 +1,18 @@
+apiVersion: 1
+
+# Email choisi comme canal (cf. cours DevOps/monitoring : email pour les
+# alertes, ChatOps/Slack ou astreinte PagerDuty pour un vrai P1 avec equipe
+# de garde - hors de portee ici, projet solo). Necessite le SMTP configure
+# sur le conteneur Grafana (GF_SMTP_*, voir docker-compose.yml.j2) ; si ces
+# variables sont vides, la regle d'alerte continue de fonctionner et de
+# s'afficher dans Grafana (Alerting > Alert rules), seul l'envoi d'email
+# echoue silencieusement - pas bloquant pour demontrer la supervision.
+contactPoints:
+  - orgId: 1
+    name: admin-email
+    receivers:
+      - uid: admin-email-receiver
+        type: email
+        settings:
+          addresses: "{{ monitoring_alert_email }}"
+          singleEmail: true

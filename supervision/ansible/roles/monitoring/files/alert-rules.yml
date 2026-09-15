@@ -1,0 +1,49 @@
+apiVersion: 1
+
+# Alerte P1 (service indisponible -> intervention immediate) : la cible
+# node_exporter (app ou staging) ne repond plus au scrape Prometheus.
+# "up == bool 0" et pas "up == 0" : la version sans bool renvoie la valeur
+# brute de up (0) pour les series filtrees, pas un booleen exploitable par
+# le seuil - "0 > 0" est toujours faux. Verifie en local avant de pousser
+# (docker compose Prometheus+Grafana, cible factice injoignable) : sans
+# "bool" l'alerte ne se declenche jamais malgre une config qui se charge
+# sans erreur.
+groups:
+  - orgId: 1
+    name: ghostblog-alerts
+    folder: ghostblog
+    interval: 1m
+    rules:
+      - uid: instance-down
+        title: "Instance down (app/staging)"
+        condition: seuil
+        data:
+          - refId: requete
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus-ds
+            model:
+              expr: "up == bool 0"
+              instant: true
+              refId: requete
+          - refId: seuil
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: requete
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+              refId: seuil
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "node_exporter ne repond plus (up == 0) - instance probablement arretee ou UFW/SG bloque le port 9100"
+        noDataState: NoData
+        execErrState: Error

@@ -21,6 +21,14 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: "{{ monitoring_grafana_admin_password }}"
       GF_SERVER_ROOT_URL: "https://{{ nginx_domain | default('') }}"
+      # Optionnel : si vide, la regle d'alerte continue de fonctionner et
+      # de s'afficher dans Grafana (Alerting > Alert rules), seul l'envoi
+      # d'email echoue silencieusement - voir contact-points.yml.j2.
+      GF_SMTP_ENABLED: "{{ 'true' if monitoring_smtp_host else 'false' }}"
+      GF_SMTP_HOST: "{{ monitoring_smtp_host }}"
+      GF_SMTP_USER: "{{ monitoring_smtp_user }}"
+      GF_SMTP_PASSWORD: "{{ monitoring_smtp_password }}"
+      GF_SMTP_FROM_ADDRESS: "{{ monitoring_smtp_user }}"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
