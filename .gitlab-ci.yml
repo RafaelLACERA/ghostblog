@@ -362,8 +362,20 @@ build_ghost_image:
   # (empeche toute course avec un deploy/destroy en cours), et ca forcerait
   # un clic inutile sur deploy_app_infra a chaque nouveau pipeline meme
   # quand l'infra existe deja et n'a pas change.
+  # scan_ghost_image (pas manuel, tourne automatiquement) EST necessaire
+  # en revanche : sans lui dans needs, GitLab ignore l'ordre des stages et
+  # ce job peut demarrer/finir avant que le gate Trivy CRITICAL ait fini
+  # de s'executer, contredisant le "zero tolerance" sur les tests.
+  # optional: true indispensable ici (contrairement a build_ghost_image) :
+  # la regle de scan_ghost_image ne couvre que app/dockerfile, plus etroite
+  # que celle-ci - sur une MR qui ne touche que de l'Ansible par exemple,
+  # scan_ghost_image n'existe pas du tout dans le pipeline, et un needs
+  # non-optionnel casserait deliver_staging/deploy_prod avec une erreur de
+  # configuration plutot que de simplement ignorer une dependance absente.
   needs:
     - job: build_ghost_image
+    - job: scan_ghost_image
+      optional: true
   before_script:
     - apk add --no-cache ansible openssh-client jq
   script:
