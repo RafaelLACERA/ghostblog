@@ -1,0 +1,17 @@
+# CVE examinees et documentees individuellement, jamais ignorees a l'aveugle
+# (voir documents/dossier-projet/05-realisation-trivy-apk.md pour le residu
+# HIGH deja accepte de la meme facon). Chaque entree ci-dessous a ete
+# verifiee par inspection directe de l'image ghost:6-alpine (docker run +
+# find/which), pas par supposition.
+
+# gosu (Go 1.24.6, /usr/local/bin/gosu) - utilitaire de changement
+# d'utilisateur embarque par l'image officielle ghost:6-alpine elle-meme,
+# pas installe par notre Dockerfile. Corrige uniquement par une future
+# image officielle recompilee avec un Go plus recent.
+CVE-2025-68121
+
+# tar@7.5.16 (/var/lib/ghost/versions/6.63.0/node_modules/.pnpm/tar@7.5.16/) -
+# dependance de Ghost lui-meme (pas de ghost-storage-adapter-s3, verifie :
+# ses seules dependances sont aws-sdk et ghost-storage-base). Corrige
+# uniquement par une future version de Ghost.
+CVE-2026-59873
