@@ -362,19 +362,25 @@ build_ghost_image:
   # (empeche toute course avec un deploy/destroy en cours), et ca forcerait
   # un clic inutile sur deploy_app_infra a chaque nouveau pipeline meme
   # quand l'infra existe deja et n'a pas change.
-  # scan_ghost_image (pas manuel, tourne automatiquement) EST necessaire
-  # en revanche : sans lui dans needs, GitLab ignore l'ordre des stages et
-  # ce job peut demarrer/finir avant que le gate Trivy CRITICAL ait fini
-  # de s'executer, contredisant le "zero tolerance" sur les tests.
-  # optional: true indispensable ici (contrairement a build_ghost_image) :
-  # la regle de scan_ghost_image ne couvre que app/dockerfile, plus etroite
-  # que celle-ci - sur une MR qui ne touche que de l'Ansible par exemple,
-  # scan_ghost_image n'existe pas du tout dans le pipeline, et un needs
-  # non-optionnel casserait deliver_staging/deploy_prod avec une erreur de
-  # configuration plutot que de simplement ignorer une dependance absente.
+  # Les jobs de test automatiques (pas manuels) sont necessaires en needs :
+  # sans ca, GitLab ignore l'ordre des stages et ce job peut demarrer/finir
+  # avant qu'un gate ait fini de s'executer, voire alors qu'il echoue -
+  # contredit le "zero tolerance" sur les tests. optional: true indispensable
+  # partout ici : chaque regle ci-dessous est plus etroite que celle de ce
+  # job (ex: tflint_app ne couvre que app/terraform/instances/**/*) - sur
+  # une MR qui ne les declenche pas, ces jobs n'existent pas du tout dans
+  # le pipeline, et un needs non-optionnel casserait deliver_staging/
+  # deploy_prod avec une erreur de configuration plutot que d'ignorer
+  # simplement une dependance absente.
   needs:
     - job: build_ghost_image
     - job: scan_ghost_image
+      optional: true
+    - job: ansible_lint
+      optional: true
+    - job: tflint_app
+      optional: true
+    - job: hadolint_dockerfile
       optional: true
   before_script:
     - apk add --no-cache ansible openssh-client jq
@@ -657,7 +663,19 @@ scan_ghost_image:
     # connaissance de cause, commenter la ligne du dessus et decommenter
     # celle-ci pour debloquer en urgence - jamais a activer par defaut.
     # - trivy image --exit-code 0 --severity CRITICAL --ignorefile .trivyignore $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  # Meme regle que build_ghost_image, pas juste "app/dockerfile" : le
+  # Dockerfile fait "apk update && apk upgrade" (voir plus haut), donc une
+  # nouvelle image construite sur un Dockerfile INCHANGE peut quand meme
+  # contenir des paquets Alpine differents (chaque build_ghost_image
+  # tourne sur un runner neuf, sans cache Docker persistant entre deux
+  # pipelines - il retelecharge les paquets tels qu'ils sont a cet
+  # instant). Se caler sur "le Dockerfile a change" plutot que "une
+  # nouvelle image a ete construite" aurait laisse passer des builds
+  # jamais scannes.
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/dockerfile
+        - app/docker-compose.yml
+        - app/ansible/**/*
+        - app/terraform/instances/**/*
