@@ -581,6 +581,24 @@ tflint_supervision:
       changes:
         - supervision/terraform/**/*
 
+# Aucun gate CI n'existait pour les roles Ansible jusqu'ici (contrairement
+# a Terraform/tflint et au Dockerfile/hadolint) - ansible-lint tournait
+# uniquement en local, a la main, avant de pousser. Meme commande que
+# celle utilisee manuellement tout au long du projet (profil "production",
+# le plus strict), donc pas de surprise attendue au premier lancement.
+ansible_lint:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - pip install --no-cache-dir ansible-lint ansible-core
+  script:
+    - ansible-lint app/ansible/ supervision/ansible/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/ansible/**/*
+        - supervision/ansible/**/*
+
 hadolint_dockerfile:
   stage: test
   image:
