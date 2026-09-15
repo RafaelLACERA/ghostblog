@@ -13,11 +13,17 @@
     path: /etc/nginx/sites-enabled/default
     state: absent
 
-- name: Deployer la configuration du reverse proxy Grafana
+# force: false - voir app/ansible/roles/nginx/tasks/main.yml, meme piege :
+# une fois Certbot passe, ce fichier contient son bloc SSL/redirection
+# (--redirect le reecrit) ; sans ce garde-fou ce template l'ecraserait a
+# chaque run suivant, jamais idempotent (changed=true en boucle) meme si
+# le site reste fonctionnel a la fin de chaque run complet.
+- name: Deployer la configuration initiale du reverse proxy Grafana (HTTP)
   ansible.builtin.template:
     src: monitoring.conf.j2
     dest: /etc/nginx/sites-available/monitoring.conf
     mode: "0644"
+    force: false
 
 - name: Activer le site monitoring
   ansible.builtin.file:
@@ -35,14 +41,15 @@
     state: reloaded
     enabled: true
 
-# Meme logique que app/ansible/roles/nginx : idempotent, renouvellement
-# auto gere par le timer systemd du paquet certbot. Le domaine doit deja
-# resoudre vers cette instance (voir deploy_dns) pour que le challenge
-# HTTP-01 puisse valider.
-- name: Obtenir/renouveler le certificat HTTPS via Certbot
+# creates: rend cette tache idempotente pour de vrai (voir
+# app/ansible/roles/nginx) - le renouvellement est gere independamment par
+# le timer systemd du paquet certbot, pas par nos runs Ansible. Le domaine
+# doit deja resoudre vers cette instance (voir deploy_dns) pour que le
+# challenge HTTP-01 puisse valider.
+- name: Obtenir le certificat HTTPS via Certbot (premiere fois uniquement)
   ansible.builtin.command:
     cmd: >
       certbot --nginx -d {{ nginx_domain }}
       -m {{ nginx_certbot_email }}
       --non-interactive --agree-tos --redirect
-  changed_when: true
+    creates: "/etc/letsencrypt/live/{{ nginx_domain }}/fullchain.pem"

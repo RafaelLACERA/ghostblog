@@ -4,6 +4,7 @@
 - name: Mettre a jour le cache apt
   ansible.builtin.apt:
     update_cache: true
+    cache_valid_time: 3600
 
 - name: Installer les paquets prerequis
   ansible.builtin.apt:

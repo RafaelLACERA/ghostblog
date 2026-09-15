@@ -17,11 +17,22 @@
     path: /etc/nginx/sites-enabled/default
     state: absent
 
-- name: Deployer la configuration du reverse proxy Ghost
+# force: false - une fois Certbot passe, ce fichier contient son bloc SSL/
+# redirection (--redirect le reecrit). Sans ce garde-fou, ce template
+# reecrase la version HTTPS de Certbot par la version HTTP simple
+# d'origine a CHAQUE run suivant, et Certbot la reecrit juste apres dans
+# le meme run - un cycle qui ne casse rien au final (le site reste en
+# HTTPS a la fin du run complet) mais qui n'est jamais reellement
+# idempotent (changed=true en boucle). Ici, seule la toute premiere
+# execution (fichier absent) genere la config HTTP de base ; Certbot
+# prend le relais pour tout le reste, y compris son propre
+# renouvellement (timer systemd, voir plus bas).
+- name: Deployer la configuration initiale du reverse proxy Ghost (HTTP)
   ansible.builtin.template:
     src: ghost.conf.j2
     dest: /etc/nginx/sites-available/ghost.conf
     mode: "0644"
+    force: false
 
 - name: Activer le site Ghost
   ansible.builtin.file:
@@ -41,15 +52,17 @@
 
 # --non-interactive/--agree-tos : pas d'invite pendant le pipeline. --redirect
 # force la redirection HTTP -> HTTPS une fois le certificat obtenu.
-# Idempotent : certbot ne redemande pas de certificat deja valide, et le
-# renouvellement auto est gere par le timer systemd installe avec le paquet
-# (pas besoin de le configurer nous-memes).
+# creates: rend cette tache idempotente pour de vrai - le renouvellement
+# n'est de toute facon pas notre responsabilite ici (timer systemd installe
+# avec le paquet certbot, tourne independamment de nos runs Ansible) ; ce
+# "creates" evite juste de retoucher un certificat/une config deja en
+# place a chaque redeploiement applicatif.
 # Prerequis : le domaine doit deja resoudre vers cette instance (voir
 # deploy_dns) pour que le challenge HTTP-01 de Let's Encrypt puisse valider.
-- name: Obtenir/renouveler le certificat HTTPS via Certbot
+- name: Obtenir le certificat HTTPS via Certbot (premiere fois uniquement)
   ansible.builtin.command:
     cmd: >
       certbot --nginx -d {{ nginx_domain }}
       -m {{ nginx_certbot_email }}
       --non-interactive --agree-tos --redirect
-  changed_when: true
+    creates: "/etc/letsencrypt/live/{{ nginx_domain }}/fullchain.pem"

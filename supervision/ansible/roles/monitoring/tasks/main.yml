@@ -29,25 +29,30 @@
     group: ubuntu
     mode: "0644"
 
+# copy et non template : fichiers YAML statiques, aucune variable Jinja
+# dedans (contrairement a contact-points.yml.j2, qui reste un vrai
+# template) - meme piege que le dashboard JSON plus tot : template
+# fonctionnerait aussi, mais copy+files/ est le bon outil pour du contenu
+# fige, cf. convention du reste du role.
 - name: Provisionner la datasource Grafana (Prometheus, automatique au demarrage)
-  ansible.builtin.template:
-    src: datasource.yml.j2
+  ansible.builtin.copy:
+    src: datasource.yml
     dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/datasource.yml"
     owner: ubuntu
     group: ubuntu
     mode: "0644"
 
 - name: Provisionner le fournisseur de dashboards Grafana
-  ansible.builtin.template:
-    src: dashboards.yml.j2
+  ansible.builtin.copy:
+    src: dashboards.yml
     dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/dashboards.yml"
     owner: ubuntu
     group: ubuntu
     mode: "0644"
 
 - name: Provisionner la regle d'alerte "instance down"
-  ansible.builtin.template:
-    src: alert-rules.yml.j2
+  ansible.builtin.copy:
+    src: alert-rules.yml
     dest: "{{ monitoring_dir }}/grafana/provisioning/alerting/alert-rules.yml"
     owner: ubuntu
     group: ubuntu
@@ -62,8 +67,8 @@
     mode: "0644"
 
 - name: Provisionner la politique de notification
-  ansible.builtin.template:
-    src: notification-policies.yml.j2
+  ansible.builtin.copy:
+    src: notification-policies.yml
     dest: "{{ monitoring_dir }}/grafana/provisioning/alerting/notification-policies.yml"
     owner: ubuntu
     group: ubuntu
