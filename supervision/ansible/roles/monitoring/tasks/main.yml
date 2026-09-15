@@ -10,6 +10,7 @@
     - "{{ monitoring_dir }}"
     - "{{ monitoring_dir }}/grafana/provisioning/datasources"
     - "{{ monitoring_dir }}/grafana/provisioning/dashboards"
+    - "{{ monitoring_dir }}/grafana/provisioning/alerting"
     - "{{ monitoring_dir }}/grafana/dashboards"
 
 - name: Deployer le docker-compose.yml
@@ -40,6 +41,30 @@
   ansible.builtin.template:
     src: dashboards.yml.j2
     dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/dashboards.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+
+- name: Provisionner la regle d'alerte "instance down"
+  ansible.builtin.template:
+    src: alert-rules.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/alerting/alert-rules.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+
+- name: Provisionner le contact point (email)
+  ansible.builtin.template:
+    src: contact-points.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/alerting/contact-points.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+
+- name: Provisionner la politique de notification
+  ansible.builtin.template:
+    src: notification-policies.yml.j2
+    dest: "{{ monitoring_dir }}/grafana/provisioning/alerting/notification-policies.yml"
     owner: ubuntu
     group: ubuntu
     mode: "0644"

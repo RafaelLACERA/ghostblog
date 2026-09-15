@@ -16,6 +16,7 @@ Contrainte forte du projet : le jour de la soutenance, aucun poste personnel n'e
   - `supervision/terraform/` (state `supervision`) : instance EC2 dédiée à la supervision (Prometheus + Grafana), cycle de vie totalement indépendant des instances Ghost — elle continue de fonctionner (et de les observer, y compris comme `DOWN`) pendant un `destroy_app_infra`/`deploy_app_infra` de test.
 - **Nginx (reverse proxy) + Certbot (HTTPS via Let's Encrypt)** sur chaque instance (app, staging, et supervision), configurés par un rôle Ansible `nginx` — le domaine attendu est dérivé de `GHOST_URL_APP`/`GHOST_URL_STAGING` pour Ghost, de `MONITORING_DOMAIN` pour Grafana (voir section Variables CI/CD).
 - **Supervision (Prometheus + Grafana)** sur une instance EC2 dédiée (`supervision/`), scrapant `node_exporter` (binaire natif, pas de conteneur, pour ne pas fausser la mesure de charge) installé sur les instances app/staging. Dashboard Grafana et datasource Prometheus provisionnés automatiquement au démarrage. Limite assumée : les métriques/dashboards ne survivent pas à un `destroy_supervision` (pas de stockage S3/EBS dédié pour cette donnée à faible enjeu, contrairement à RDS/S3 pour le contenu Ghost) — c'est de l'observation temps réel pendant les cycles de test, pas de l'historisation long terme.
+- **Alerting Grafana** : règle "instance down" (sévérité P1, `up == bool 0` sur node_exporter, `for: 2m`), provisionnée par fichier comme la datasource/le dashboard. Destinataire email fixé dans `supervision/ansible/roles/monitoring/defaults/main.yml` (`monitoring_alert_email`, même principe que `nginx_certbot_email` ailleurs dans le projet — à changer là en cas de fork). SMTP optionnel (voir Variables CI/CD) : sans SMTP configuré, l'alerte se déclenche et s'affiche quand même dans Grafana (Alerting → Alert rules), seul l'envoi d'email échoue silencieusement.
 
 ## Structure du dépôt
 
@@ -72,6 +73,9 @@ Dans les deux cas, rien ne s'exécute sans un clic explicite sur le bouton du jo
 | `GHOST_URL_STAGING` | URL publique du staging (`https://ghost-staging.lacera.fr`) | Non* | Non |
 | `MONITORING_DOMAIN` | Domaine de Grafana (`ghost-monitoring.lacera.fr`), utilisé par le rôle `nginx` de `supervision/ansible` pour le certificat Certbot | Non* | Non |
 | `GRAFANA_ADMIN_PASSWORD` | Mot de passe du compte admin Grafana | Non* | Oui |
+| `MONITORING_SMTP_HOST` | Serveur SMTP pour l'envoi des alertes par email — optionnel, vide = alerte visible dans Grafana mais pas d'email envoyé | Non* | Non |
+| `MONITORING_SMTP_USER` | Utilisateur SMTP — optionnel | Non* | Non |
+| `MONITORING_SMTP_PASSWORD` | Mot de passe SMTP — optionnel | Non* | Oui |
 | `OVH_ENDPOINT` | Endpoint API OVH (`ovh-eu`) | Non* | Non |
 | `OVH_APPLICATION_KEY` | Identifiant d'application OVH | Non* | Oui |
 | `OVH_APPLICATION_SECRET` | Secret d'application OVH | Non* | Oui |

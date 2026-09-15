@@ -7,3 +7,10 @@ monitoring_grafana_admin_password: ""
 # absente du scrape (pas d'echec).
 monitoring_app_target: ""
 monitoring_staging_target: ""
+# Alerte "instance down" (voir templates/alert-rules.yml.j2) - destinataire
+# et SMTP optionnel (voir docker-compose.yml.j2 : sans hote SMTP, l'alerte
+# fonctionne quand meme, seul l'envoi d'email echoue).
+monitoring_alert_email: "rafael.lacera@gmail.com"
+monitoring_smtp_host: ""
+monitoring_smtp_user: ""
+monitoring_smtp_password: ""

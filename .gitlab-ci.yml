@@ -511,6 +511,9 @@ deploy_supervision_config:
       -e monitoring_grafana_admin_password="$GRAFANA_ADMIN_PASSWORD"
       -e monitoring_app_target="$APP_TARGET"
       -e monitoring_staging_target="$STAGING_TARGET"
+      -e monitoring_smtp_host="$MONITORING_SMTP_HOST"
+      -e monitoring_smtp_user="$MONITORING_SMTP_USER"
+      -e monitoring_smtp_password="$MONITORING_SMTP_PASSWORD"
       -e nginx_domain="$MONITORING_DOMAIN"
   environment:
     name: supervision
