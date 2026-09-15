@@ -36,3 +36,4 @@ RUN npm install ghost-storage-adapter-s3@2.8.0 --no-save && \
 
 # On expose le port par défaut
 EXPOSE 2368
+# touche temporaire pour tester needs sur scan_ghost_image
