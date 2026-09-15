@@ -435,7 +435,8 @@ build_ghost_image:
         echo "Echec de la verification post-deploiement : $GHOST_URL a repondu HTTP $HTTP_CODE (attendu 200)"
         exit 1
       fi
-    - echo "Deploiement confirme : $GHOST_URL repond HTTP 200"
+    - >
+      echo "Deploiement confirme : $GHOST_URL repond HTTP 200"
 
 # Continuous Delivery : chaque push livre automatiquement la nouvelle image
 # sur staging, sans creer ni couter d'infra supplementaire (l'instance doit
