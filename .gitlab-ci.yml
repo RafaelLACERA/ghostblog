@@ -590,7 +590,12 @@ ansible_lint:
   stage: test
   image: python:3.12-slim
   before_script:
+    # community.general fournit le module "ufw" utilise par le role
+    # hardening - sans cette collection, ansible-lint echoue avec
+    # "couldn't resolve module/action 'community.general.ufw'", meme si
+    # le code est correct (teste en local avant de pousser ce job).
     - pip install --no-cache-dir ansible-lint ansible-core
+    - ansible-galaxy collection install community.general
   script:
     - ansible-lint app/ansible/ supervision/ansible/
   rules:
@@ -598,6 +603,7 @@ ansible_lint:
       changes:
         - app/ansible/**/*
         - supervision/ansible/**/*
+    - if: '$CI_PIPELINE_SOURCE == "web"'
 
 hadolint_dockerfile:
   stage: test
