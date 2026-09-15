@@ -383,7 +383,7 @@ build_ghost_image:
     - job: hadolint_dockerfile
       optional: true
   before_script:
-    - apk add --no-cache ansible openssh-client jq
+    - apk add --no-cache ansible openssh-client jq curl
   script:
     - cd $TF_DIR
     - !reference [.tf_backend_init, script]
@@ -423,6 +423,19 @@ build_ghost_image:
       '{ghost_app_image_tag:$image_tag,ghost_app_registry_url:$registry_url,ghost_app_registry_user:$registry_user,ghost_app_registry_password:$registry_password,ghost_app_db_host:$db_host,ghost_app_db_port:$db_port,ghost_app_db_name:$db_name,ghost_app_db_user:$db_user,ghost_app_db_password:$db_password,ghost_app_url:$ghost_url,ghost_app_s3_bucket:$s3_bucket}'
       > extra_vars.json
     - ansible-playbook -i "${TARGET_IP}," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml -e @extra_vars.json
+    # Ansible qui reussit veut juste dire "les taches se sont executees",
+    # pas "le site repond vraiment" - meme logique que le healthcheck deja
+    # present dans le role ghost_app, mais verifie ici depuis l'exterieur
+    # (comme un vrai visiteur), a travers Nginx/Certbot/DNS, pas juste en
+    # local sur l'instance.
+    - >
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$GHOST_URL")
+    - >
+      if [ "$HTTP_CODE" != "200" ]; then
+        echo "Echec de la verification post-deploiement : $GHOST_URL a repondu HTTP $HTTP_CODE (attendu 200)"
+        exit 1
+      fi
+    - echo "Deploiement confirme : $GHOST_URL repond HTTP 200"
 
 # Continuous Delivery : chaque push livre automatiquement la nouvelle image
 # sur staging, sans creer ni couter d'infra supplementaire (l'instance doit
