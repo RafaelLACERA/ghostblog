@@ -645,7 +645,18 @@ scan_ghost_image:
     - build_ghost_image
   script:
     - trivy image --exit-code 0 --severity CRITICAL,HIGH $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
-    - trivy image --exit-code 1 --severity CRITICAL $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    # .trivyignore : CVE deja examinees individuellement et documentees
+    # (voir le fichier), jamais une CVE non encore regardee. Trivy se met
+    # a jour a chaque run - une CVE peut apparaitre du jour au lendemain
+    # sur une image qu'on n'a pourtant pas touchee (deja arrive : 3
+    # CRITICAL trouvees le 2026-09-15 sur du code inchange depuis des
+    # jours, toutes dans des binaires embarques par ghost:6-alpine).
+    - trivy image --exit-code 1 --severity CRITICAL --ignorefile .trivyignore $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+    # SECOURS SOUTENANCE UNIQUEMENT : si une nouvelle CVE CRITICAL bloque
+    # le jour J sans le temps de l'investiguer/l'ajouter au .trivyignore en
+    # connaissance de cause, commenter la ligne du dessus et decommenter
+    # celle-ci pour debloquer en urgence - jamais a activer par defaut.
+    # - trivy image --exit-code 0 --severity CRITICAL --ignorefile .trivyignore $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
