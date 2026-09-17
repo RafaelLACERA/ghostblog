@@ -693,3 +693,4 @@ scan_ghost_image:
         - app/docker-compose.yml
         - app/ansible/**/*
         - app/terraform/instances/**/*
+    - if: '$CI_PIPELINE_SOURCE == "web"'
