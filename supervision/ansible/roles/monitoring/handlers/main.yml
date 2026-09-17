@@ -1,0 +1,11 @@
+---
+# Grafana ne relit les fichiers de provisioning alerting qu'au demarrage
+# du conteneur - un changement de fichier seul (bind mount) sans
+# redemarrage du conteneur n'est jamais pris en compte, meme si "docker
+# compose up -d" tourne juste apres (il ne recree pas un conteneur dont
+# le docker-compose.yml n'a pas change).
+- name: Redemarrer grafana
+  ansible.builtin.command:
+    cmd: docker compose restart grafana
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true

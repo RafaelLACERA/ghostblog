@@ -57,6 +57,7 @@
     owner: ubuntu
     group: ubuntu
     mode: "0644"
+  notify: Redemarrer grafana
 
 - name: Provisionner le contact point (email)
   ansible.builtin.template:
@@ -65,6 +66,7 @@
     owner: ubuntu
     group: ubuntu
     mode: "0644"
+  notify: Redemarrer grafana
 
 - name: Provisionner la politique de notification
   ansible.builtin.copy:
@@ -73,6 +75,7 @@
     owner: ubuntu
     group: ubuntu
     mode: "0644"
+  notify: Redemarrer grafana
 
 - name: Copier le dashboard node_exporter pre-construit
   ansible.builtin.copy:
@@ -87,6 +90,12 @@
     cmd: docker compose up -d --pull always --remove-orphans
     chdir: "{{ monitoring_dir }}"
   changed_when: true
+
+# Doit s'executer apres "docker compose up -d" (le conteneur doit deja
+# exister pour qu'un restart soit possible) mais avant le healthcheck
+# (sinon celui-ci validerait l'etat d'avant redemarrage).
+- name: Appliquer immediatement le redemarrage de Grafana si necessaire
+  ansible.builtin.meta: flush_handlers
 
 # Meme logique que ghost_app : ne pas se contenter de "le conteneur a
 # demarre", verifier que Grafana repond vraiment avant de considerer le
