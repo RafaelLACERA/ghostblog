@@ -699,3 +699,23 @@ scan_ghost_image:
         - app/ansible/**/*
         - app/terraform/instances/**/*
     - if: '$CI_PIPELINE_SOURCE == "web"'
+
+# Scan des images officielles utilisees par la stack de supervision (pas de
+# Dockerfile a nous ici, images tirees telles quelles) - informatif
+# uniquement (exit-code 0) : contrairement a scan_ghost_image, on ne peut
+# pas corriger le contenu de ces images, seule une mise a jour de version
+# en amont le peut. Comble le meme trou que scan_ghost_image, sur les
+# composants tiers deployes plutot que sur l'image qu'on construit.
+scan_supervision_images:
+  stage: test
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  script:
+    - trivy image --exit-code 0 --severity CRITICAL,HIGH prom/prometheus:v3.1.0
+    - trivy image --exit-code 0 --severity CRITICAL,HIGH grafana/grafana:11.4.0
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - supervision/ansible/roles/monitoring/templates/docker-compose.yml.j2
+    - if: '$CI_PIPELINE_SOURCE == "web"'
