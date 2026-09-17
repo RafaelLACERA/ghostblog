@@ -41,6 +41,7 @@
     owner: ubuntu
     group: ubuntu
     mode: "0644"
+  notify: Redemarrer grafana
 
 - name: Provisionner le fournisseur de dashboards Grafana
   ansible.builtin.copy:
@@ -49,6 +50,7 @@
     owner: ubuntu
     group: ubuntu
     mode: "0644"
+  notify: Redemarrer grafana
 
 - name: Provisionner la regle d'alerte "instance down"
   ansible.builtin.copy:
@@ -84,6 +86,7 @@
     owner: ubuntu
     group: ubuntu
     mode: "0644"
+  notify: Redemarrer grafana
 
 - name: Tirer les images et demarrer la stack
   ansible.builtin.command:
