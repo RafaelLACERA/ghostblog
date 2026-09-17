@@ -43,7 +43,116 @@ groups:
         for: 2m
         labels:
           severity: critical
+          priority: P1
         annotations:
           summary: "node_exporter ne repond plus (up == 0) - instance probablement arretee ou UFW/SG bloque le port 9100"
+        noDataState: NoData
+        execErrState: Error
+
+      # Seuil SLA documente (voir dossier-projet) : 85% choisi car proche
+      # du point de swapping observe lors de l'incident memoire reel sur
+      # t3.micro (voir project_t3micro_memory_pressure).
+      - uid: memory-high
+        title: "Memoire elevee (app/staging/supervision)"
+        condition: seuil
+        data:
+          - refId: requete
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus-ds
+            model:
+              expr: "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100"
+              instant: true
+              refId: requete
+          - refId: seuil
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: requete
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [85]
+              refId: seuil
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+        annotations:
+          summary: "Memoire utilisee > 85% pendant 5 min - risque de swapping/pression memoire"
+        noDataState: NoData
+        execErrState: Error
+
+      - uid: cpu-high
+        title: "CPU elevee (app/staging/supervision)"
+        condition: seuil
+        data:
+          - refId: requete
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus-ds
+            model:
+              expr: "100 - (avg by (env, instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)"
+              instant: true
+              refId: requete
+          - refId: seuil
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: requete
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [90]
+              refId: seuil
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+        annotations:
+          summary: "CPU utilisee > 90% pendant 5 min"
+        noDataState: NoData
+        execErrState: Error
+
+      - uid: disk-high
+        title: "Disque racine plein (app/staging/supervision)"
+        condition: seuil
+        data:
+          - refId: requete
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus-ds
+            model:
+              expr: "100 - ((node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"}) * 100)"
+              instant: true
+              refId: requete
+          - refId: seuil
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: requete
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [80]
+              refId: seuil
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+        annotations:
+          summary: "Disque racine utilise > 80% - risque de panne par manque d'espace"
         noDataState: NoData
         execErrState: Error
