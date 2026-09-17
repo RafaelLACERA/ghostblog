@@ -11,6 +11,12 @@ services:
     # directement (pas de regle de security group pour le port 9090).
     ports:
       - "127.0.0.1:9090:9090"
+    # Permet au conteneur de joindre le node_exporter natif (systemd, hors
+    # Docker) tournant sur l'hote lui-meme, pour le scrape "supervision" -
+    # localhost:9100 depuis le conteneur pointerait sur sa propre boucle,
+    # pas sur l'hote.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - monitoring-net
 

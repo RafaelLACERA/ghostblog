@@ -5,5 +5,6 @@
   roles:
     - hardening
     - docker
+    - node_exporter
     - monitoring
     - nginx
