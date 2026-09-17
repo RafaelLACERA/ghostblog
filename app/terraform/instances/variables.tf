@@ -13,7 +13,7 @@ variable "instance_type_app" {
 variable "instance_type_staging" {
   description = "Type d'instance pour le serveur applicatif Ghost (staging)"
   type        = string
-  default     = "t3.small"
+  default     = "t3.micro"
 }
 
 variable "project_name" {
