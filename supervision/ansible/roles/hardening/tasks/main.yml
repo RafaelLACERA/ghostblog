@@ -36,6 +36,15 @@
     port: "443"
     proto: tcp
 
+# node_exporter (scrape de Prometheus vers l'hote via host.docker.internal) :
+# le security group AWS n'ouvre pas ce port en externe, seul le trafic
+# intra-instance l'atteint.
+- name: Autoriser node_exporter dans UFW
+  community.general.ufw:
+    rule: allow
+    port: "9100"
+    proto: tcp
+
 - name: Activer UFW avec politique par defaut deny en entree
   community.general.ufw:
     state: enabled

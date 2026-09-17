@@ -1,0 +1,41 @@
+---
+# Binaire systemd natif, pas un conteneur Docker : evite d'ajouter une
+# charge (memoire/CPU) sur des instances dont on cherche justement a
+# mesurer la vraie consommation (voir dimensionnement t3.small -> t3.micro).
+- name: Creer l'utilisateur systeme node_exporter
+  ansible.builtin.user:
+    name: node_exporter
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+
+- name: Telecharger et extraire node_exporter
+  ansible.builtin.unarchive:
+    src: "{{ node_exporter_download_url }}"
+    dest: /tmp
+    remote_src: true
+    creates: "/tmp/{{ node_exporter_archive }}/node_exporter"
+
+- name: Installer le binaire node_exporter
+  ansible.builtin.copy:
+    src: "/tmp/{{ node_exporter_archive }}/node_exporter"
+    dest: /usr/local/bin/node_exporter
+    owner: node_exporter
+    group: node_exporter
+    mode: "0755"
+    remote_src: true
+  notify: Redemarrer node_exporter
+
+- name: Deployer le service systemd node_exporter
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    mode: "0644"
+  notify: Redemarrer node_exporter
+
+- name: Demarrer et activer node_exporter
+  ansible.builtin.systemd:
+    name: node_exporter
+    state: started
+    enabled: true
+    daemon_reload: true
