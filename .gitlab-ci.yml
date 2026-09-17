@@ -573,6 +573,7 @@ tflint_app:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/instances/**/*
+    - if: '$CI_PIPELINE_SOURCE == "web"'
 
 tflint_data:
   stage: test
@@ -586,6 +587,7 @@ tflint_data:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/persistent/**/*
+    - if: '$CI_PIPELINE_SOURCE == "web"'
 
 tflint_dns:
   stage: test
@@ -599,6 +601,7 @@ tflint_dns:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/dns/**/*
+    - if: '$CI_PIPELINE_SOURCE == "web"'
 
 tflint_supervision:
   stage: test
@@ -612,6 +615,7 @@ tflint_supervision:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - supervision/terraform/**/*
+    - if: '$CI_PIPELINE_SOURCE == "web"'
 
 # Aucun gate CI n'existait pour les roles Ansible jusqu'ici (contrairement
 # a Terraform/tflint et au Dockerfile/hadolint) - ansible-lint tournait
@@ -648,6 +652,7 @@ hadolint_dockerfile:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/dockerfile
+    - if: '$CI_PIPELINE_SOURCE == "web"'
 
 # Scan de vulnerabilites (CVE) sur l'image Ghost buildee. Rapport complet
 # HIGH+CRITICAL en exit-code 0 (informatif, jamais bloquant), puis un
