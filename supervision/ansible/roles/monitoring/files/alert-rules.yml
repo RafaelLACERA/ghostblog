@@ -84,7 +84,7 @@ groups:
           priority: P2
         annotations:
           summary: "Memoire utilisee > 85% pendant 5 min - risque de swapping/pression memoire"
-        noDataState: NoData
+        noDataState: OK
         execErrState: Error
 
       - uid: cpu-high
@@ -119,7 +119,7 @@ groups:
           priority: P2
         annotations:
           summary: "CPU utilisee > 90% pendant 5 min"
-        noDataState: NoData
+        noDataState: OK
         execErrState: Error
 
       - uid: disk-high
@@ -154,5 +154,5 @@ groups:
           priority: P2
         annotations:
           summary: "Disque racine utilise > 80% - risque de panne par manque d'espace"
-        noDataState: NoData
+        noDataState: OK
         execErrState: Error
