@@ -41,11 +41,20 @@
     state: reloaded
     enabled: true
 
+# Le challenge HTTP-01 de Certbot echoue en NXDOMAIN si deploy_dns n'a
+# pas encore fini de propager l'enregistrement (deja arrive en reel,
+# 2026-09-24, deploy_supervision_config lance avant deploy_dns).
+- name: Attendre que le domaine resolve avant Certbot
+  ansible.builtin.command: getent hosts {{ nginx_domain }}
+  register: nginx_dns_check
+  until: nginx_dns_check.rc == 0
+  retries: 12
+  delay: 10
+  changed_when: false
+
 # creates: rend cette tache idempotente pour de vrai (voir
 # app/ansible/roles/nginx) - le renouvellement est gere independamment par
-# le timer systemd du paquet certbot, pas par nos runs Ansible. Le domaine
-# doit deja resoudre vers cette instance (voir deploy_dns) pour que le
-# challenge HTTP-01 puisse valider.
+# le timer systemd du paquet certbot, pas par nos runs Ansible.
 - name: Obtenir le certificat HTTPS via Certbot (premiere fois uniquement)
   ansible.builtin.command:
     cmd: >
