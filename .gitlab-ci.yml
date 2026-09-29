@@ -12,9 +12,7 @@ stages:
 variables:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
-  # Consommees par app/terraform/instances/remote_state.tf pour lire le state
-  # persistant app-data (VPC/subnets/security group). Inoffensives pour
-  # les jobs qui ne les utilisent pas.
+  # Pour lire les states distants (terraform_remote_state)
   TF_VAR_gitlab_api_url: $CI_API_V4_URL
   TF_VAR_gitlab_project_id: $CI_PROJECT_ID
   TF_VAR_gitlab_ci_job_token: $CI_JOB_TOKEN
@@ -82,9 +80,7 @@ terraform_validate_dns:
       changes:
         - app/terraform/dns/**/*
 
-# Job manuel unique (bouton GitLab) : fmt -> init -> validate -> plan -> apply.
-# GitLab arrete le job a la premiere commande en echec (ex: plan invalide),
-# l'apply ne s'execute donc jamais si une etape precedente a echouer
+# Chaque etape doit reussir avant l'apply
 .t_terraform_deploy:
   extends: .tf_image
   stage: provisioning
@@ -105,10 +101,7 @@ deploy_app_infra:
   environment:
     name: app
     action: start
-  # Empeche ce job de tourner en meme temps que destroy_app_infra/
-  # deliver_staging/deploy_prod (meme instances cibles) : GitLab met les
-  # jobs partageant ce resource_group en file d'attente au lieu de les
-  # laisser tourner en parallele.
+  # File d'attente avec les jobs qui touchent les memes instances
   resource_group: app_infra
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
@@ -117,17 +110,12 @@ deploy_app_infra:
         - app/ansible/**/*
       when: manual
       allow_failure: true
-    # Pipeline lance a la main (bouton "Run pipeline" dans l'UI GitLab,
-    # accessible depuis un telephone) : rend le bouton disponible sans
-    # attendre qu'une MR touche les bons fichiers. Utile le jour de la
-    # soutenance, sans PC.
+    # Pipeline manuel (Run pipeline), pilotable depuis un telephone
     - if: '$CI_PIPELINE_SOURCE == "web"'
       when: manual
       allow_failure: true
 
-# Couche persistante (VPC, subnets, security group) : jamais detruite par le
-# cycle de test EC2 (deploy_app_infra/destroy_app_infra), volontairement
-# separee dans son propre state.
+# Couche persistante : state separe, jamais detruite avec les instances
 deploy_data:
   extends: .t_terraform_deploy
   variables:
@@ -147,20 +135,13 @@ deploy_data:
       when: manual
       allow_failure: true
 
-# Enregistrements DNS OVH (ghost.lacera.fr/staging.lacera.fr) : lit les IP
-# publiques dans le state "app" (instances EC2), doit donc etre lance apres
-# deploy_app_infra.
+# Lit les IP du state app : a lancer apres deploy_app_infra
 deploy_dns:
   extends: .t_terraform_deploy
   variables:
     TF_DIR: app/terraform/dns
     TF_STATE_NAME: app-dns
-  # Lookup souple de l'IP de l'instance supervision (curl+jq sur l'API du
-  # state "supervision"), plutot qu'un data.terraform_remote_state cote
-  # Terraform : ce dernier echoue durement ("Unable to find remote state")
-  # si le state n'a jamais ete applique une seule fois - deja vu en test
-  # reel. before_script s'execute dans le meme shell que le script hérité
-  # de .t_terraform_deploy : la variable exportee ici lui reste visible.
+  # Lookup souple : pas d'echec si la supervision n'existe pas
   before_script:
     - apk add --no-cache curl jq
     - >
@@ -181,9 +162,7 @@ deploy_dns:
       when: manual
       allow_failure: true
 
-# Instance de supervision (Prometheus/Grafana) : lit le state "app-data"
-# (subnet, security group), cycle de vie totalement independant de
-# deploy_app_infra/deploy_data - resource_group dedie ci-dessous.
+# Supervision : cycle de vie independant de l'application
 deploy_supervision:
   extends: .t_terraform_deploy
   variables:
@@ -204,8 +183,7 @@ deploy_supervision:
       when: manual
       allow_failure: true
 
-# Job manuel de demontage complet, pour eviter de supprimer les ressources
-# a la main dans la console AWS.
+# Demontage sans passer par la console AWS
 .t_terraform_destroy:
   extends: .tf_image
   stage: destroy
@@ -244,14 +222,7 @@ destroy_data:
   environment:
     name: data
     action: stop
-  # Detruire app-data (VPC/subnets/security group) alors que des EC2 tournent
-  # encore dedans echoue cote AWS (DependencyViolation) : ce garde-fou
-  # verifie l'etat "app" avant de commencer, pour donner un message clair
-  # plutot qu'une erreur AWS a moitie comprehensible.
-  # Telecharger dans un fichier puis grep le fichier (plutot que curl | grep
-  # -q directement) : grep -q peut fermer le tube des qu'il a lu assez de
-  # donnees, ce qui casse l'ecriture de curl en cours de route (erreur 23)
-  # et fausse le test - deja vu en test reel.
+  # Garde-fou : pas de destruction du reseau tant que des EC2 existent
   before_script:
     - apk add --no-cache curl
     - >
@@ -317,12 +288,9 @@ build_ghost_image:
   services:
     - docker:27-dind
   script:
-    # --password-stdin plutot que -p : evite que le mot de passe apparaisse
-    # dans les arguments du process docker (visible via "ps aux").
+    # --password-stdin : mot de passe absent de ps aux
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    # Pas de tag :latest : le pipeline cible toujours une image par son SHA
-    # exact (extra_vars.json/.env), :latest ne serait jamais utilise en
-    # pratique et gonflerait le registry pour rien sur chaque MR.
+    # Tag par SHA uniquement, jamais :latest
     - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA -f app/dockerfile app
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
   rules:
@@ -332,24 +300,10 @@ build_ghost_image:
         - app/docker-compose.yml
         - app/ansible/**/*
         - app/terraform/instances/**/*
-    # deliver_staging/deploy_prod en dependent (needs non-optionnel) : doit
-    # exister aussi sur un pipeline lance a la main.
+    # Aussi en pipeline web : deliver_staging et deploy_prod en dependent
     - if: '$CI_PIPELINE_SOURCE == "web"'
 
-# Recupere IP + cle SSH + infos RDS depuis le state Terraform et lance
-# Ansible, dans le MEME job : la cle privee et le mot de passe RDS ne
-# quittent jamais le systeme de fichiers ephemere de ce job (pas d'artifact
-# GitLab telechargeable, meme de facon temporaire).
-# TF_ENV_PREFIX designe l'environnement cible (app ou staging) : tous les
-# outputs Terraform necessaires sont derives de ce prefixe. Chaque job ne
-# cible qu'UN environnement a la fois - staging est teste avant que prod
-# ne soit mise a jour.
-# Le mot de passe RDS (genere par random_password) peut contenir des
-# caracteres speciaux ($, !, (), etc.) : on construit les extra-vars via un
-# fichier JSON genere par jq plutot que des "-e cle=valeur" en ligne de
-# commande, pour eviter tout risque de corruption/injection shell.
-# Technique jq (--arg/--argjson pour echapper proprement chaque valeur)
-# elaboree avec l'aide de Claude Code et Gemini.
+# Cle SSH et mot de passe RDS restent dans ce job, jamais en artifact
 .t_ansible_deploy:
   extends: .tf_image
   stage: deploy
@@ -357,21 +311,7 @@ build_ghost_image:
     TF_DIR: app/terraform/instances
     TF_STATE_NAME: app
     ANSIBLE_CONFIG: $CI_PROJECT_DIR/app/ansible/ansible.cfg
-  # Pas de needs sur deploy_app_infra : ce serait redondant avec le
-  # garde-fou (verifie que l'IP/la base existent) et le resource_group
-  # (empeche toute course avec un deploy/destroy en cours), et ca forcerait
-  # un clic inutile sur deploy_app_infra a chaque nouveau pipeline meme
-  # quand l'infra existe deja et n'a pas change.
-  # Les jobs de test automatiques (pas manuels) sont necessaires en needs :
-  # sans ca, GitLab ignore l'ordre des stages et ce job peut demarrer/finir
-  # avant qu'un gate ait fini de s'executer, voire alors qu'il echoue -
-  # contredit le "zero tolerance" sur les tests. optional: true indispensable
-  # partout ici : chaque regle ci-dessous est plus etroite que celle de ce
-  # job (ex: tflint_app ne couvre que app/terraform/instances/**/*) - sur
-  # une MR qui ne les declenche pas, ces jobs n'existent pas du tout dans
-  # le pipeline, et un needs non-optionnel casserait deliver_staging/
-  # deploy_prod avec une erreur de configuration plutot que d'ignorer
-  # simplement une dependance absente.
+  # Pas de deploiement si un gate echoue ; optional car absent de certaines MR
   needs:
     - job: build_ghost_image
     - job: scan_ghost_image
@@ -387,11 +327,7 @@ build_ghost_image:
   script:
     - cd $TF_DIR
     - !reference [.tf_backend_init, script]
-    # GitLab execute tout ce script comme un seul shell continu (le cd $TF_DIR
-    # plus haut reste actif ici) : pas besoin de fichiers intermediaires, les
-    # variables shell suffisent et restent valables apres le "cd ../../.."
-    # plus bas. Seule la cle SSH doit rester un vrai fichier (--private-key
-    # en a besoin).
+    # Un seul shell : les variables restent valables apres le cd
     - TARGET_IP=$(terraform output -raw ${TF_ENV_PREFIX}_public_ip)
     - DB_HOST=$(terraform output -raw ${TF_ENV_PREFIX}_db_host)
     - DB_PORT=$(terraform output -raw ${TF_ENV_PREFIX}_db_port)
@@ -407,6 +343,7 @@ build_ghost_image:
         echo "IP ou base de donnees manquante : verifier deploy_app_infra et deploy_data."
         exit 1
       fi
+    # Extra-vars via jq (echappement des secrets), technique vue avec Claude Code et Gemini
     - >
       jq -n
       --arg image_tag "$CI_COMMIT_SHORT_SHA"
@@ -423,11 +360,7 @@ build_ghost_image:
       '{ghost_app_image_tag:$image_tag,ghost_app_registry_url:$registry_url,ghost_app_registry_user:$registry_user,ghost_app_registry_password:{"__ansible_unsafe":$registry_password},ghost_app_db_host:$db_host,ghost_app_db_port:$db_port,ghost_app_db_name:$db_name,ghost_app_db_user:$db_user,ghost_app_db_password:{"__ansible_unsafe":$db_password},ghost_app_url:$ghost_url,ghost_app_s3_bucket:$s3_bucket}'
       > extra_vars.json
     - ansible-playbook -i "${TARGET_IP}," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml -e @extra_vars.json
-    # Ansible qui reussit veut juste dire "les taches se sont executees",
-    # pas "le site repond vraiment" - meme logique que le healthcheck deja
-    # present dans le role ghost_app, mais verifie ici depuis l'exterieur
-    # (comme un vrai visiteur), a travers Nginx/Certbot/DNS, pas juste en
-    # local sur l'instance.
+    # Verification externe : le site doit repondre 200 via DNS et HTTPS
     - >
       HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$GHOST_URL")
     - >
@@ -438,14 +371,7 @@ build_ghost_image:
     - >
       echo "Deploiement confirme : $GHOST_URL repond HTTP 200"
 
-# Continuous Delivery : chaque push livre automatiquement la nouvelle image
-# sur staging, sans creer ni couter d'infra supplementaire (l'instance doit
-# deja exister). La mise en prod reste un choix manuel separe (deploy_prod) :
-# ce n'est pas du Continuous Deployment.
-# GHOST_URL_STAGING/GHOST_URL_APP (variables CI/CD GitLab, Settings > CI/CD >
-# Variables) doivent toujours avoir une valeur (ex: http://localhost:8090 en
-# attendant le DNS) : une variable vide ecraserait le defaut du role Ansible
-# par une chaine vide au lieu de le laisser s'appliquer.
+# Livraison continue en staging ; la prod reste manuelle
 deliver_staging:
   extends: .t_ansible_deploy
   variables:
@@ -465,8 +391,7 @@ deliver_staging:
       when: manual
       allow_failure: true
 
-# Manuel : promotion volontaire vers prod du meme tag d'image que celui
-# valide sur staging, jamais automatique.
+# Promotion manuelle vers la prod, meme image que staging
 deploy_prod:
   extends: .t_ansible_deploy
   variables:
@@ -488,16 +413,7 @@ deploy_prod:
       when: manual
       allow_failure: true
 
-# Configuration Ansible de l'instance de supervision (Prometheus/Grafana).
-# Pas d'extension de .t_ansible_deploy (specifique a Ghost : DB/S3/registry) :
-# job dedie, plus simple. Les IP privees app/staging sont recuperees en
-# "lookup souple" via l'API du state "app" (curl+jq, meme technique que le
-# garde-fou de destroy_data) plutot que via un data.terraform_remote_state -
-# volontaire, pour ne jamais faire echouer ce job si l'infra Ghost est
-# detruite (cycle de vie de la supervision totalement independant).
-# MONITORING_DOMAIN (variable CI/CD GitLab) : "monitoring.lacera.fr".
-# GRAFANA_ADMIN_PASSWORD (variable CI/CD GitLab, masquee) : mot de passe du
-# compte admin Grafana.
+# Lookup souple des IP app/staging : ne bloque pas si l'application est detruite
 deploy_supervision_config:
   extends: .tf_image
   stage: deploy
@@ -617,19 +533,12 @@ tflint_supervision:
         - supervision/terraform/**/*
     - if: '$CI_PIPELINE_SOURCE == "web"'
 
-# Aucun gate CI n'existait pour les roles Ansible jusqu'ici (contrairement
-# a Terraform/tflint et au Dockerfile/hadolint) - ansible-lint tournait
-# uniquement en local, a la main, avant de pousser. Meme commande que
-# celle utilisee manuellement tout au long du projet (profil "production",
-# le plus strict), donc pas de surprise attendue au premier lancement.
+# Meme profil ansible-lint qu'en local (production)
 ansible_lint:
   stage: test
   image: python:3.12-slim
   before_script:
-    # community.general fournit le module "ufw" utilise par le role
-    # hardening - sans cette collection, ansible-lint echoue avec
-    # "couldn't resolve module/action 'community.general.ufw'", meme si
-    # le code est correct (teste en local avant de pousser ce job).
+    # community.general : module ufw du role hardening
     - pip install --no-cache-dir ansible-lint ansible-core
     - ansible-galaxy collection install community.general
   script:
@@ -654,10 +563,7 @@ hadolint_dockerfile:
         - app/dockerfile
     - if: '$CI_PIPELINE_SOURCE == "web"'
 
-# Scan de vulnerabilites (CVE) sur l'image Ghost buildee. Rapport complet
-# HIGH+CRITICAL en exit-code 0 (informatif, jamais bloquant), puis un
-# deuxieme passage cible uniquement sur CRITICAL en exit-code 1 : si une
-# faille critique apparait, le job echoue et bloque le pipeline.
+# Rapport HIGH+CRITICAL, puis gate bloquant sur CRITICAL
 scan_ghost_image:
   stage: test
   image:
@@ -670,27 +576,9 @@ scan_ghost_image:
     - build_ghost_image
   script:
     - trivy image --exit-code 0 --severity CRITICAL,HIGH $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
-    # .trivyignore : CVE deja examinees individuellement et documentees
-    # (voir le fichier), jamais une CVE non encore regardee. Trivy se met
-    # a jour a chaque run - une CVE peut apparaitre du jour au lendemain
-    # sur une image qu'on n'a pourtant pas touchee (deja arrive : 3
-    # CRITICAL trouvees le 2026-09-15 sur du code inchange depuis des
-    # jours, toutes dans des binaires embarques par ghost:6-alpine).
+    # .trivyignore : uniquement des CVE examinees et documentees
     - trivy image --exit-code 1 --severity CRITICAL --ignorefile .trivyignore $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
-    # SECOURS SOUTENANCE UNIQUEMENT : si une nouvelle CVE CRITICAL bloque
-    # le jour J sans le temps de l'investiguer/l'ajouter au .trivyignore en
-    # connaissance de cause, commenter la ligne du dessus et decommenter
-    # celle-ci pour debloquer en urgence - jamais a activer par defaut.
-    # - trivy image --exit-code 0 --severity CRITICAL --ignorefile .trivyignore $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
-  # Meme regle que build_ghost_image, pas juste "app/dockerfile" : le
-  # Dockerfile fait "apk update && apk upgrade" (voir plus haut), donc une
-  # nouvelle image construite sur un Dockerfile INCHANGE peut quand meme
-  # contenir des paquets Alpine differents (chaque build_ghost_image
-  # tourne sur un runner neuf, sans cache Docker persistant entre deux
-  # pipelines - il retelecharge les paquets tels qu'ils sont a cet
-  # instant). Se caler sur "le Dockerfile a change" plutot que "une
-  # nouvelle image a ete construite" aurait laisse passer des builds
-  # jamais scannes.
+  # Memes regles que build_ghost_image : toute image construite est scannee
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -700,20 +588,17 @@ scan_ghost_image:
         - app/terraform/instances/**/*
     - if: '$CI_PIPELINE_SOURCE == "web"'
 
-# Scan des images officielles utilisees par la stack de supervision (pas de
-# Dockerfile a nous ici, images tirees telles quelles) - informatif
-# uniquement (exit-code 0) : contrairement a scan_ghost_image, on ne peut
-# pas corriger le contenu de ces images, seule une mise a jour de version
-# en amont le peut. Comble le meme trou que scan_ghost_image, sur les
-# composants tiers deployes plutot que sur l'image qu'on construit.
+# Meme gate que scan_ghost_image ; une CVE CRITICAL se corrige en montant de version
 scan_supervision_images:
   stage: test
   image:
     name: aquasec/trivy:latest
     entrypoint: [""]
   script:
-    - trivy image --exit-code 0 --severity CRITICAL,HIGH prom/prometheus:v3.1.0
-    - trivy image --exit-code 0 --severity CRITICAL,HIGH grafana/grafana:11.4.0
+    - trivy image --exit-code 0 --severity CRITICAL,HIGH prom/prometheus:v3.15.0
+    - trivy image --exit-code 0 --severity CRITICAL,HIGH grafana/grafana:13.2.3
+    - trivy image --exit-code 1 --severity CRITICAL prom/prometheus:v3.15.0
+    - trivy image --exit-code 1 --severity CRITICAL grafana/grafana:13.2.3
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
