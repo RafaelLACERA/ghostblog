@@ -1,35 +1,28 @@
 services:
   prometheus:
-    image: prom/prometheus:v3.1.0
+    image: prom/prometheus:v3.15.0
     container_name: prometheus
     restart: on-failure
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    # Loopback uniquement : Grafana (meme reseau Docker) lui parle par nom
-    # de service, personne d'autre n'a besoin d'atteindre Prometheus
-    # directement (pas de regle de security group pour le port 9090).
+    # Loopback : seul Grafana l'interroge
     ports:
       - "127.0.0.1:9090:9090"
-    # Permet au conteneur de joindre le node_exporter natif (systemd, hors
-    # Docker) tournant sur l'hote lui-meme, pour le scrape "supervision" -
-    # localhost:9100 depuis le conteneur pointerait sur sa propre boucle,
-    # pas sur l'hote.
+    # Joindre le node_exporter de l'hote depuis le conteneur
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - monitoring-net
 
   grafana:
-    image: grafana/grafana:11.4.0
+    image: grafana/grafana:13.2.3
     container_name: grafana
     restart: on-failure
     environment:
       GF_SECURITY_ADMIN_PASSWORD: "{{ monitoring_grafana_admin_password }}"
       GF_SERVER_ROOT_URL: "https://{{ nginx_domain | default('') }}"
-      # Optionnel : si vide, la regle d'alerte continue de fonctionner et
-      # de s'afficher dans Grafana (Alerting > Alert rules), seul l'envoi
-      # d'email echoue silencieusement - voir contact-points.yml.j2.
+      # SMTP optionnel : sans lui, les alertes s'affichent mais aucun email ne part
       GF_SMTP_ENABLED: "{{ 'true' if monitoring_smtp_host else 'false' }}"
       GF_SMTP_HOST: "{{ monitoring_smtp_host }}"
       GF_SMTP_USER: "{{ monitoring_smtp_user }}"
@@ -50,10 +43,7 @@ networks:
   monitoring-net:
     driver: bridge
 
-# Volumes locaux a l'instance (pas de persistance S3/EBS dediee) : voir
-# note dans le dossier de certification - metriques/dashboards perdus a un
-# destroy_supervision, limite assumee (observation temps reel pendant les
-# tests, pas d'historisation long terme).
+# Volumes locaux : historique perdu a chaque destroy_supervision (limite assumee)
 volumes:
   prometheus_data:
   grafana_data:
