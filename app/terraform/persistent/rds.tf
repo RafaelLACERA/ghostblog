@@ -56,7 +56,7 @@ resource "random_password" "staging_db" {
 resource "aws_db_instance" "app" {
   identifier              = "${var.project_name}-app-db"
   engine                  = "mysql"
-  engine_version          = "8.0"
+  engine_version          = "8.4"
   instance_class          = "db.t3.micro"
   allocated_storage       = 20
   storage_encrypted       = true
@@ -70,14 +70,15 @@ resource "aws_db_instance" "app" {
   backup_retention_period = 7
   skip_final_snapshot     = true
 
+  # Support etendu payant active par defaut par AWS : desactive explicitement
+  engine_lifecycle_support = "open-source-rds-extended-support-disabled"
+
   tags = {
     Name    = "${var.project_name}-app-db"
     Project = var.project_name
   }
 
-  # prevent_destroy temporairement retire (aucun contenu reel a proteger
-  # pour l'instant) : a remettre avant la prochaine fois que ces RDS
-  # contiendront de vraies donnees.
+  # prevent_destroy desactive : bloquerait destroy_data
   # lifecycle {
   #   prevent_destroy = true
   # }
@@ -86,7 +87,7 @@ resource "aws_db_instance" "app" {
 resource "aws_db_instance" "staging" {
   identifier              = "${var.project_name}-staging-db"
   engine                  = "mysql"
-  engine_version          = "8.0"
+  engine_version          = "8.4"
   instance_class          = "db.t3.micro"
   allocated_storage       = 20
   storage_encrypted       = true
@@ -100,14 +101,15 @@ resource "aws_db_instance" "staging" {
   backup_retention_period = 7
   skip_final_snapshot     = true
 
+  # Support etendu payant active par defaut par AWS : desactive explicitement
+  engine_lifecycle_support = "open-source-rds-extended-support-disabled"
+
   tags = {
     Name    = "${var.project_name}-staging-db"
     Project = var.project_name
   }
 
-  # prevent_destroy temporairement retire (aucun contenu reel a proteger
-  # pour l'instant) : a remettre avant la prochaine fois que ces RDS
-  # contiendront de vraies donnees.
+  # prevent_destroy desactive : bloquerait destroy_data
   # lifecycle {
   #   prevent_destroy = true
   # }
