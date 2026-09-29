@@ -17,6 +17,8 @@ variables:
   TF_VAR_gitlab_project_id: $CI_PROJECT_ID
   TF_VAR_gitlab_ci_job_token: $CI_JOB_TOKEN
 
+# ===== Modeles reutilises par les jobs =====
+
 .tf_image:
   image:
     name: hashicorp/terraform:1.15
@@ -35,6 +37,13 @@ variables:
       -backend-config="unlock_method=DELETE"
       -backend-config="retry_wait_min=5"
 
+# Pipeline manuel (Run pipeline) : bouton disponible, pilotable depuis un telephone
+.rules_web_manual:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+      allow_failure: true
+
 .t_terraform_validate:
   extends: .tf_image
   stage: .pre
@@ -43,42 +52,6 @@ variables:
     - terraform fmt -check -recursive
     - terraform init -backend=false
     - terraform validate
-
-terraform_validate_app:
-  extends: .t_terraform_validate
-  variables:
-    TF_DIR: app/terraform/instances
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/instances/**/*
-
-terraform_validate_supervision:
-  extends: .t_terraform_validate
-  variables:
-    TF_DIR: supervision/terraform
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - supervision/terraform/**/*
-
-terraform_validate_data:
-  extends: .t_terraform_validate
-  variables:
-    TF_DIR: app/terraform/persistent
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/persistent/**/*
-
-terraform_validate_dns:
-  extends: .t_terraform_validate
-  variables:
-    TF_DIR: app/terraform/dns
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/dns/**/*
 
 # Chaque etape doit reussir avant l'apply
 .t_terraform_deploy:
@@ -92,97 +65,6 @@ terraform_validate_dns:
     - terraform plan -out=tfplan
     - terraform apply tfplan
 
-deploy_app_infra:
-  extends: .t_terraform_deploy
-  variables:
-    TF_DIR: app/terraform/instances
-    TF_STATE_NAME: app
-    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
-  environment:
-    name: app
-    action: start
-  # File d'attente avec les jobs qui touchent les memes instances
-  resource_group: app_infra
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/instances/**/*
-        - app/ansible/**/*
-      when: manual
-      allow_failure: true
-    # Pipeline manuel (Run pipeline), pilotable depuis un telephone
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
-
-# Couche persistante : state separe, jamais detruite avec les instances
-deploy_data:
-  extends: .t_terraform_deploy
-  variables:
-    TF_DIR: app/terraform/persistent
-    TF_STATE_NAME: app-data
-    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
-  environment:
-    name: data
-    action: start
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/persistent/**/*
-      when: manual
-      allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
-
-# Lit les IP du state app : a lancer apres deploy_app_infra
-deploy_dns:
-  extends: .t_terraform_deploy
-  variables:
-    TF_DIR: app/terraform/dns
-    TF_STATE_NAME: app-dns
-  # Lookup souple : pas d'echec si la supervision n'existe pas
-  before_script:
-    - apk add --no-cache curl jq
-    - >
-      curl -sS -o supervision_state.json -w "HTTP %{http_code}\n"
-      -u "gitlab-ci-token:${CI_JOB_TOKEN}"
-      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/supervision" || true
-    - export TF_VAR_supervision_public_ip=$(jq -r '.outputs.supervision_public_ip.value // empty' supervision_state.json 2>/dev/null || true)
-  environment:
-    name: dns
-    action: start
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/dns/**/*
-      when: manual
-      allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
-
-# Supervision : cycle de vie independant de l'application
-deploy_supervision:
-  extends: .t_terraform_deploy
-  variables:
-    TF_DIR: supervision/terraform
-    TF_STATE_NAME: supervision
-  environment:
-    name: supervision
-    action: start
-  resource_group: supervision
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - supervision/terraform/**/*
-        - supervision/ansible/**/*
-      when: manual
-      allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
-
 # Demontage sans passer par la console AWS
 .t_terraform_destroy:
   extends: .tf_image
@@ -191,117 +73,6 @@ deploy_supervision:
     - cd $TF_DIR
     - !reference [.tf_backend_init, script]
     - terraform destroy -auto-approve
-
-destroy_app_infra:
-  extends: .t_terraform_destroy
-  variables:
-    TF_DIR: app/terraform/instances
-    TF_STATE_NAME: app
-    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
-  environment:
-    name: app
-    action: stop
-  resource_group: app_infra
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/instances/**/*
-        - app/ansible/**/*
-      when: manual
-      allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
-
-destroy_data:
-  extends: .t_terraform_destroy
-  variables:
-    TF_DIR: app/terraform/persistent
-    TF_STATE_NAME: app-data
-    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
-  environment:
-    name: data
-    action: stop
-  # Garde-fou : pas de destruction du reseau tant que des EC2 existent
-  before_script:
-    - apk add --no-cache curl
-    - >
-      curl -sS -o app_state.json -w "HTTP %{http_code}\n"
-      -u "gitlab-ci-token:${CI_JOB_TOKEN}"
-      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/app"
-    - >
-      if grep -q "aws_instance" app_state.json; then
-        echo "Des instances EC2 existent encore dans le state 'app' : lance destroy_app_infra avant destroy_data."
-        exit 1
-      fi
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/persistent/**/*
-      when: manual
-      allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
-
-destroy_dns:
-  extends: .t_terraform_destroy
-  variables:
-    TF_DIR: app/terraform/dns
-    TF_STATE_NAME: app-dns
-  environment:
-    name: dns
-    action: stop
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/dns/**/*
-      when: manual
-      allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
-
-destroy_supervision:
-  extends: .t_terraform_destroy
-  variables:
-    TF_DIR: supervision/terraform
-    TF_STATE_NAME: supervision
-  environment:
-    name: supervision
-    action: stop
-  resource_group: supervision
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - supervision/terraform/**/*
-        - supervision/ansible/**/*
-      when: manual
-      allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
-
-build_ghost_image:
-  stage: build
-  image: docker:27
-  services:
-    - docker:27-dind
-  script:
-    # --password-stdin : mot de passe absent de ps aux
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
-    # Tag par SHA uniquement, jamais :latest
-    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA -f app/dockerfile app
-    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/dockerfile
-        - app/docker-compose.yml
-        - app/ansible/**/*
-        - app/terraform/instances/**/*
-    # Aussi en pipeline web : deliver_staging et deploy_prod en dependent
-    - if: '$CI_PIPELINE_SOURCE == "web"'
 
 # Cle SSH et mot de passe RDS restent dans ce job, jamais en artifact
 .t_ansible_deploy:
@@ -371,111 +142,68 @@ build_ghost_image:
     - >
       echo "Deploiement confirme : $GHOST_URL repond HTTP 200"
 
-# Livraison continue en staging ; la prod reste manuelle
-deliver_staging:
-  extends: .t_ansible_deploy
+# ===== Stage .pre : validation Terraform =====
+
+terraform_validate_app:
+  extends: .t_terraform_validate
   variables:
-    TF_ENV_PREFIX: staging
-    GHOST_URL: $GHOST_URL_STAGING
-  environment:
-    name: staging
-  resource_group: app_infra
+    TF_DIR: app/terraform/instances
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/instances/**/*
-        - app/ansible/**/*
-        - app/dockerfile
-        - app/docker-compose.yml
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
 
-# Promotion manuelle vers la prod, meme image que staging
-deploy_prod:
-  extends: .t_ansible_deploy
+terraform_validate_data:
+  extends: .t_terraform_validate
   variables:
-    TF_ENV_PREFIX: app
-    GHOST_URL: $GHOST_URL_APP
-  environment:
-    name: app
-  resource_group: app_infra
+    TF_DIR: app/terraform/persistent
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
-        - app/terraform/instances/**/*
-        - app/ansible/**/*
-        - app/dockerfile
-        - app/docker-compose.yml
-      when: manual
-      allow_failure: true
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
+        - app/terraform/persistent/**/*
 
-# Lookup souple des IP app/staging : ne bloque pas si l'application est detruite
-deploy_supervision_config:
-  extends: .tf_image
-  stage: deploy
+terraform_validate_dns:
+  extends: .t_terraform_validate
+  variables:
+    TF_DIR: app/terraform/dns
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/dns/**/*
+
+terraform_validate_supervision:
+  extends: .t_terraform_validate
   variables:
     TF_DIR: supervision/terraform
-    TF_STATE_NAME: supervision
-    ANSIBLE_CONFIG: $CI_PROJECT_DIR/supervision/ansible/ansible.cfg
-  before_script:
-    - apk add --no-cache ansible openssh-client curl jq
-  script:
-    - cd $TF_DIR
-    - !reference [.tf_backend_init, script]
-    - TARGET_IP=$(terraform output -raw supervision_public_ip)
-    - terraform output -raw supervision_ssh_private_key > ../../ssh_key.pem
-    - chmod 600 ../../ssh_key.pem
-    - cd ../..
-    - >
-      if [ -z "$TARGET_IP" ]; then
-        echo "IP supervision manquante : verifier deploy_supervision."
-        exit 1
-      fi
-    - >
-      curl -sS -o app_state.json -w "HTTP %{http_code}\n"
-      -u "gitlab-ci-token:${CI_JOB_TOKEN}"
-      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/app"
-    - APP_IP=$(jq -r '.outputs.app_private_ip.value // empty' app_state.json)
-    - STAGING_IP=$(jq -r '.outputs.staging_private_ip.value // empty' app_state.json)
-    - >
-      if [ -z "$APP_IP" ]; then
-        echo "IP privee app introuvable (deploy_app_infra jamais lance ou state 'app' detruit) - cible ignoree."
-      fi
-    - >
-      if [ -z "$STAGING_IP" ]; then
-        echo "IP privee staging introuvable - cible ignoree."
-      fi
-    - APP_TARGET=""
-    - if [ -n "$APP_IP" ]; then APP_TARGET="${APP_IP}:9100"; fi
-    - STAGING_TARGET=""
-    - if [ -n "$STAGING_IP" ]; then STAGING_TARGET="${STAGING_IP}:9100"; fi
-    - >
-      ansible-playbook -i "${TARGET_IP}," -u ubuntu --private-key ssh_key.pem
-      supervision/ansible/playbook.yml
-      -e monitoring_grafana_admin_password="$GRAFANA_ADMIN_PASSWORD"
-      -e monitoring_app_target="$APP_TARGET"
-      -e monitoring_staging_target="$STAGING_TARGET"
-      -e monitoring_smtp_host="$MONITORING_SMTP_HOST"
-      -e monitoring_smtp_user="$MONITORING_SMTP_USER"
-      -e monitoring_smtp_password="$MONITORING_SMTP_PASSWORD"
-      -e nginx_domain="$MONITORING_DOMAIN"
-  environment:
-    name: supervision
-  resource_group: supervision
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - supervision/terraform/**/*
-        - supervision/ansible/**/*
-      when: manual
-      allow_failure: true
+
+# ===== Stage build : image Ghost =====
+
+build_ghost_image:
+  stage: build
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    # --password-stdin : mot de passe absent de ps aux
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    # Tag par SHA uniquement, jamais :latest
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA -f app/dockerfile app
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/dockerfile
+        - app/docker-compose.yml
+        - app/ansible/**/*
+        - app/terraform/instances/**/*
+    # Aussi en pipeline web : deliver_staging et deploy_prod en dependent
     - if: '$CI_PIPELINE_SOURCE == "web"'
-      when: manual
-      allow_failure: true
+
+# ===== Stage test : linters et scans de securite =====
 
 tflint_app:
   stage: test
@@ -604,3 +332,273 @@ scan_supervision_images:
       changes:
         - supervision/ansible/roles/monitoring/templates/docker-compose.yml.j2
     - if: '$CI_PIPELINE_SOURCE == "web"'
+
+# ===== Stage provisioning : creation de l'infrastructure =====
+
+# Couche persistante : state separe, jamais detruite avec les instances
+deploy_data:
+  extends: .t_terraform_deploy
+  variables:
+    TF_DIR: app/terraform/persistent
+    TF_STATE_NAME: app-data
+    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
+  environment:
+    name: data
+    action: start
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/persistent/**/*
+      when: manual
+      allow_failure: true
+    - !reference [.rules_web_manual, rules]
+
+deploy_app_infra:
+  extends: .t_terraform_deploy
+  variables:
+    TF_DIR: app/terraform/instances
+    TF_STATE_NAME: app
+    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
+  environment:
+    name: app
+    action: start
+  # File d'attente avec les jobs qui touchent les memes instances
+  resource_group: app_infra
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/instances/**/*
+        - app/ansible/**/*
+      when: manual
+      allow_failure: true
+    - !reference [.rules_web_manual, rules]
+
+# Supervision : cycle de vie independant de l'application
+deploy_supervision:
+  extends: .t_terraform_deploy
+  variables:
+    TF_DIR: supervision/terraform
+    TF_STATE_NAME: supervision
+  environment:
+    name: supervision
+    action: start
+  resource_group: supervision
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - supervision/terraform/**/*
+        - supervision/ansible/**/*
+      when: manual
+      allow_failure: true
+    - !reference [.rules_web_manual, rules]
+
+# Lit les IP du state app : a lancer apres deploy_app_infra
+deploy_dns:
+  extends: .t_terraform_deploy
+  variables:
+    TF_DIR: app/terraform/dns
+    TF_STATE_NAME: app-dns
+  # Lookup souple : pas d'echec si la supervision n'existe pas
+  before_script:
+    - apk add --no-cache curl jq
+    - >
+      curl -sS -o supervision_state.json -w "HTTP %{http_code}\n"
+      -u "gitlab-ci-token:${CI_JOB_TOKEN}"
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/supervision" || true
+    - export TF_VAR_supervision_public_ip=$(jq -r '.outputs.supervision_public_ip.value // empty' supervision_state.json 2>/dev/null || true)
+  environment:
+    name: dns
+    action: start
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/dns/**/*
+      when: manual
+      allow_failure: true
+    - !reference [.rules_web_manual, rules]
+
+# ===== Stage deploy : configuration Ansible =====
+
+# Livraison continue en staging ; la prod reste manuelle
+deliver_staging:
+  extends: .t_ansible_deploy
+  variables:
+    TF_ENV_PREFIX: staging
+    GHOST_URL: $GHOST_URL_STAGING
+  environment:
+    name: staging
+  resource_group: app_infra
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/instances/**/*
+        - app/ansible/**/*
+        - app/dockerfile
+        - app/docker-compose.yml
+    - !reference [.rules_web_manual, rules]
+
+# Promotion manuelle vers la prod, meme image que staging
+deploy_prod:
+  extends: .t_ansible_deploy
+  variables:
+    TF_ENV_PREFIX: app
+    GHOST_URL: $GHOST_URL_APP
+  environment:
+    name: app
+  resource_group: app_infra
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/instances/**/*
+        - app/ansible/**/*
+        - app/dockerfile
+        - app/docker-compose.yml
+      when: manual
+      allow_failure: true
+    - !reference [.rules_web_manual, rules]
+
+# Lookup souple des IP app/staging : ne bloque pas si l'application est detruite
+deploy_supervision_config:
+  extends: .tf_image
+  stage: deploy
+  variables:
+    TF_DIR: supervision/terraform
+    TF_STATE_NAME: supervision
+    ANSIBLE_CONFIG: $CI_PROJECT_DIR/supervision/ansible/ansible.cfg
+  before_script:
+    - apk add --no-cache ansible openssh-client curl jq
+  script:
+    - cd $TF_DIR
+    - !reference [.tf_backend_init, script]
+    - TARGET_IP=$(terraform output -raw supervision_public_ip)
+    - terraform output -raw supervision_ssh_private_key > ../../ssh_key.pem
+    - chmod 600 ../../ssh_key.pem
+    - cd ../..
+    - >
+      if [ -z "$TARGET_IP" ]; then
+        echo "IP supervision manquante : verifier deploy_supervision."
+        exit 1
+      fi
+    - >
+      curl -sS -o app_state.json -w "HTTP %{http_code}\n"
+      -u "gitlab-ci-token:${CI_JOB_TOKEN}"
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/app"
+    - APP_IP=$(jq -r '.outputs.app_private_ip.value // empty' app_state.json)
+    - STAGING_IP=$(jq -r '.outputs.staging_private_ip.value // empty' app_state.json)
+    - >
+      if [ -z "$APP_IP" ]; then
+        echo "IP privee app introuvable (deploy_app_infra jamais lance ou state 'app' detruit) - cible ignoree."
+      fi
+    - >
+      if [ -z "$STAGING_IP" ]; then
+        echo "IP privee staging introuvable - cible ignoree."
+      fi
+    - APP_TARGET=""
+    - if [ -n "$APP_IP" ]; then APP_TARGET="${APP_IP}:9100"; fi
+    - STAGING_TARGET=""
+    - if [ -n "$STAGING_IP" ]; then STAGING_TARGET="${STAGING_IP}:9100"; fi
+    - >
+      ansible-playbook -i "${TARGET_IP}," -u ubuntu --private-key ssh_key.pem
+      supervision/ansible/playbook.yml
+      -e monitoring_grafana_admin_password="$GRAFANA_ADMIN_PASSWORD"
+      -e monitoring_app_target="$APP_TARGET"
+      -e monitoring_staging_target="$STAGING_TARGET"
+      -e monitoring_smtp_host="$MONITORING_SMTP_HOST"
+      -e monitoring_smtp_user="$MONITORING_SMTP_USER"
+      -e monitoring_smtp_password="$MONITORING_SMTP_PASSWORD"
+      -e nginx_domain="$MONITORING_DOMAIN"
+  environment:
+    name: supervision
+  resource_group: supervision
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - supervision/terraform/**/*
+        - supervision/ansible/**/*
+      when: manual
+      allow_failure: true
+    - !reference [.rules_web_manual, rules]
+
+# ===== Stage destroy : dns d'abord, puis app et supervision, data en dernier =====
+
+destroy_dns:
+  extends: .t_terraform_destroy
+  variables:
+    TF_DIR: app/terraform/dns
+    TF_STATE_NAME: app-dns
+  environment:
+    name: dns
+    action: stop
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/dns/**/*
+      when: manual
+      allow_failure: true
+    - !reference [.rules_web_manual, rules]
+
+destroy_app_infra:
+  extends: .t_terraform_destroy
+  variables:
+    TF_DIR: app/terraform/instances
+    TF_STATE_NAME: app
+    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
+  environment:
+    name: app
+    action: stop
+  resource_group: app_infra
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/instances/**/*
+        - app/ansible/**/*
+      when: manual
+      allow_failure: true
+    - !reference [.rules_web_manual, rules]
+
+destroy_supervision:
+  extends: .t_terraform_destroy
+  variables:
+    TF_DIR: supervision/terraform
+    TF_STATE_NAME: supervision
+  environment:
+    name: supervision
+    action: stop
+  resource_group: supervision
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - supervision/terraform/**/*
+        - supervision/ansible/**/*
+      when: manual
+      allow_failure: true
+    - !reference [.rules_web_manual, rules]
+
+destroy_data:
+  extends: .t_terraform_destroy
+  variables:
+    TF_DIR: app/terraform/persistent
+    TF_STATE_NAME: app-data
+    TF_VAR_supervision_ip_cidr: $SUPERVISION_IP_CIDR
+  environment:
+    name: data
+    action: stop
+  # Garde-fou : pas de destruction du reseau tant que des EC2 existent
+  before_script:
+    - apk add --no-cache curl
+    - >
+      curl -sS -o app_state.json -w "HTTP %{http_code}\n"
+      -u "gitlab-ci-token:${CI_JOB_TOKEN}"
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/app"
+    - >
+      if grep -q "aws_instance" app_state.json; then
+        echo "Des instances EC2 existent encore dans le state 'app' : lance destroy_app_infra avant destroy_data."
+        exit 1
+      fi
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/terraform/persistent/**/*
+      when: manual
+      allow_failure: true
+    - !reference [.rules_web_manual, rules]
