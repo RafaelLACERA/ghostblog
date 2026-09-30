@@ -38,3 +38,5 @@ npm-debug.log
 
 # Brouillons du dossier de certification (pas destines au repo)
 documents/dossier-projet/
+# Reglages personnels de l'editeur
+.vscode/
