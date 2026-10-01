@@ -26,12 +26,11 @@ resource "aws_instance" "this" {
   key_name               = var.key_name
   iam_instance_profile   = var.iam_instance_profile
 
-  # http_put_response_hop_limit par defaut (1) suffit pour un process sur
-  # l'hote, mais pas pour un process dans un conteneur Docker (le pont
-  # reseau Docker compte comme un saut de plus) : sans ca, le SDK AWS dans
-  # le conteneur Ghost ne peut pas recuperer les credentials du role IAM
-  # via le service de metadonnees (169.254.169.254), et l'adaptateur S3
-  # echoue silencieusement a l'initialisation.
+  root_block_device {
+    volume_size = var.root_volume_size
+  }
+
+  # hop limit 2 : un conteneur Docker doit pouvoir joindre le service de metadonnees
   metadata_options {
     http_tokens                 = "required"
     http_put_response_hop_limit = 2

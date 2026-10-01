@@ -39,3 +39,9 @@ variable "iam_instance_profile" {
   type        = string
   default     = null
 }
+
+variable "root_volume_size" {
+  description = "Taille du disque racine en Go"
+  type        = number
+  default     = 8
+}

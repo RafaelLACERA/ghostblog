@@ -4,10 +4,18 @@ variable "aws_region" {
   default     = "eu-west-3"
 }
 
+# t3.small : memoire mesuree a 84 % en t3.micro avec Grafana 13 (01/10)
 variable "instance_type_supervision" {
   description = "Type d'instance pour Prometheus/Grafana"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.small"
+}
+
+# 15 Go : disque mesure a 80 % sur 8 Go avec les images Grafana 13 et Prometheus v3.15 (01/10)
+variable "root_volume_size_supervision" {
+  description = "Taille du disque racine de l'instance de supervision en Go"
+  type        = number
+  default     = 15
 }
 
 variable "project_name" {
