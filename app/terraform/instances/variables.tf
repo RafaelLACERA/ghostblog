@@ -10,10 +10,11 @@ variable "instance_type_app" {
   default     = "t3.small"
 }
 
+# Meme type que la prod : preproduction conforme a la production
 variable "instance_type_staging" {
   description = "Type d'instance pour le serveur applicatif Ghost (staging)"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.small"
 }
 
 variable "project_name" {
