@@ -7,6 +7,6 @@ module "supervision_instance" {
   security_group_ids = [data.terraform_remote_state.data.outputs.supervision_security_group_id]
   key_name           = aws_key_pair.supervision.key_name
   project_name       = var.project_name
-  # iam_instance_profile omis : aucun acces AWS necessaire, l'instance ne
-  # fait que scraper node_exporter sur le reseau (voir modules/ec2-instance/variables.tf).
+  root_volume_size   = var.root_volume_size_supervision
+  # Pas de profil IAM : l'instance ne fait que scraper le reseau
 }
