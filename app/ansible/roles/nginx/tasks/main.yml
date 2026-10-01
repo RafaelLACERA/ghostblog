@@ -16,43 +16,39 @@
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
+  notify: Recharger nginx
 
-# force: false - une fois Certbot passe, ce fichier contient son bloc SSL/
-# redirection (--redirect le reecrit). Sans ce garde-fou, ce template
-# reecrase la version HTTPS de Certbot par la version HTTP simple
-# d'origine a CHAQUE run suivant, et Certbot la reecrit juste apres dans
-# le meme run - un cycle qui ne casse rien au final (le site reste en
-# HTTPS a la fin du run complet) mais qui n'est jamais reellement
-# idempotent (changed=true en boucle). Ici, seule la toute premiere
-# execution (fichier absent) genere la config HTTP de base ; Certbot
-# prend le relais pour tout le reste, y compris son propre
-# renouvellement (timer systemd, voir plus bas).
+# force: false : apres le premier run, Certbot gere ce fichier (HTTPS)
 - name: Deployer la configuration initiale du reverse proxy Ghost (HTTP)
   ansible.builtin.template:
     src: ghost.conf.j2
     dest: /etc/nginx/sites-available/ghost.conf
     mode: "0644"
     force: false
+  notify: Recharger nginx
 
 - name: Activer le site Ghost
   ansible.builtin.file:
     src: /etc/nginx/sites-available/ghost.conf
     dest: /etc/nginx/sites-enabled/ghost.conf
     state: link
+  notify: Recharger nginx
 
 - name: Verifier la configuration nginx
   ansible.builtin.command: nginx -t
   changed_when: false
 
-- name: Demarrer/recharger nginx et l'activer au boot
+- name: Demarrer nginx et l'activer au boot
   ansible.builtin.service:
     name: nginx
-    state: reloaded
+    state: started
     enabled: true
 
-# Le challenge HTTP-01 de Certbot echoue en NXDOMAIN si deploy_dns n'a
-# pas encore fini de propager l'enregistrement (meme incident reel que
-# supervision/ansible/roles/nginx, 2026-09-24).
+# Certbot a besoin de la nouvelle configuration deja chargee
+- name: Appliquer le rechargement de nginx avant Certbot
+  ansible.builtin.meta: flush_handlers
+
+# Sinon NXDOMAIN si le DNS n'a pas encore propage
 - name: Attendre que le domaine resolve avant Certbot
   ansible.builtin.command: getent hosts {{ nginx_domain }}
   register: nginx_dns_check
@@ -61,8 +57,6 @@
   delay: 10
   changed_when: false
 
-# "creates" evite juste de retoucher un certificat/une config deja en
-# place a chaque redeploiement applicatif.
 - name: Obtenir le certificat HTTPS via Certbot (premiere fois uniquement)
   ansible.builtin.command:
     cmd: >

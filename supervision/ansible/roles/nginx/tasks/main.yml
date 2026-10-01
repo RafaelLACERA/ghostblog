@@ -12,38 +12,39 @@
   ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
+  notify: Recharger nginx
 
-# force: false - voir app/ansible/roles/nginx/tasks/main.yml, meme piege :
-# une fois Certbot passe, ce fichier contient son bloc SSL/redirection
-# (--redirect le reecrit) ; sans ce garde-fou ce template l'ecraserait a
-# chaque run suivant, jamais idempotent (changed=true en boucle) meme si
-# le site reste fonctionnel a la fin de chaque run complet.
+# force: false : apres le premier run, Certbot gere ce fichier (HTTPS)
 - name: Deployer la configuration initiale du reverse proxy Grafana (HTTP)
   ansible.builtin.template:
     src: monitoring.conf.j2
     dest: /etc/nginx/sites-available/monitoring.conf
     mode: "0644"
     force: false
+  notify: Recharger nginx
 
 - name: Activer le site monitoring
   ansible.builtin.file:
     src: /etc/nginx/sites-available/monitoring.conf
     dest: /etc/nginx/sites-enabled/monitoring.conf
     state: link
+  notify: Recharger nginx
 
 - name: Verifier la configuration nginx
   ansible.builtin.command: nginx -t
   changed_when: false
 
-- name: Demarrer/recharger nginx et l'activer au boot
+- name: Demarrer nginx et l'activer au boot
   ansible.builtin.service:
     name: nginx
-    state: reloaded
+    state: started
     enabled: true
 
-# Le challenge HTTP-01 de Certbot echoue en NXDOMAIN si deploy_dns n'a
-# pas encore fini de propager l'enregistrement (deja arrive en reel,
-# 2026-09-24, deploy_supervision_config lance avant deploy_dns).
+# Certbot a besoin de la nouvelle configuration deja chargee
+- name: Appliquer le rechargement de nginx avant Certbot
+  ansible.builtin.meta: flush_handlers
+
+# Sinon NXDOMAIN si le DNS n'a pas encore propage
 - name: Attendre que le domaine resolve avant Certbot
   ansible.builtin.command: getent hosts {{ nginx_domain }}
   register: nginx_dns_check
@@ -52,9 +53,6 @@
   delay: 10
   changed_when: false
 
-# creates: rend cette tache idempotente pour de vrai (voir
-# app/ansible/roles/nginx) - le renouvellement est gere independamment par
-# le timer systemd du paquet certbot, pas par nos runs Ansible.
 - name: Obtenir le certificat HTTPS via Certbot (premiere fois uniquement)
   ansible.builtin.command:
     cmd: >
