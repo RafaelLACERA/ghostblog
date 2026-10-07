@@ -6,6 +6,48 @@ Contrainte forte du projet : le jour de la soutenance, aucun poste personnel n'e
 
 ## Architecture
 
+```mermaid
+flowchart LR
+    nav["Navigateur<br>visiteur, jury"]
+    gitlab["GitLab CI/CD<br>Terraform + Ansible"]
+    ovh["OVH<br>DNS lacera.fr"]
+    smtp["SMTP<br>emails d'alerte"]
+
+    subgraph aws["AWS eu-west-3 - un VPC"]
+        subgraph prod["EC2 prod"]
+            pn["Nginx + Certbot"] --> pg["Ghost 6<br>Docker"]
+            pe["node_exporter"]
+        end
+        subgraph staging["EC2 staging"]
+            sn["Nginx + Certbot"] --> sg["Ghost 6<br>Docker"]
+            se["node_exporter"]
+        end
+        subgraph sup["EC2 supervision"]
+            prom["Prometheus"]
+            graf["Grafana"]
+        end
+        rds[("RDS MySQL 8.4<br>une base par env.")]
+        s3[("S3<br>un bucket par env.")]
+    end
+
+    nav -->|HTTPS 443| pn
+    nav -->|HTTPS 443| sn
+    nav -->|HTTPS 443| graf
+    gitlab -->|SSH 22| prod
+    gitlab -->|SSH 22| staging
+    gitlab -->|SSH 22| sup
+    gitlab -->|API| ovh
+    pg -->|MySQL 3306| rds
+    sg -->|MySQL 3306| rds
+    pg -->|HTTPS, role IAM| s3
+    sg -->|HTTPS, role IAM| s3
+    prom -->|HTTP 9100| pe
+    prom -->|HTTP 9100| se
+    graf -->|SMTP| smtp
+```
+
+Diagramme UML de déploiement détaillé (nœuds, environnements d'exécution, artefacts) : [docs/diagramme-deploiement.png](docs/diagramme-deploiement.png), source modifiable dans [docs/diagramme-deploiement.drawio](docs/diagramme-deploiement.drawio).
+
 - **Deux instances EC2** (+ Elastic IP), une par environnement (`app` = production, `staging`), provisionnées via le même module Terraform réutilisable (`app/terraform/instances/modules/ec2-instance`), même security group et même clé SSH — l'environnement de staging reste conforme à la prod.
 - **Deux bases RDS MySQL 8.4** séparées (une par environnement) : tester sur staging ne touche jamais aux données de prod. Le support étendu payant d'AWS est explicitement désactivé (`engine_lifecycle_support`).
 - **Deux buckets S3** séparés (un par environnement) pour les médias Ghost (images uploadées, thèmes) via l'adaptateur `ghost-storage-adapter-s3` — sans ça, les uploads seraient perdus à chaque recréation des EC2 (contrairement à RDS, un volume Docker local ne survit pas à `destroy_app_infra`). Chaque instance accède à son bucket via un rôle IAM dédié (pas de clé AWS statique dans le conteneur).
