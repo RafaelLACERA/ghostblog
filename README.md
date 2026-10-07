@@ -37,7 +37,7 @@ Contrainte forte du projet : le jour de la soutenance, aucun poste personnel n'e
 
 Stages : `.pre` (validation Terraform) → `build` (image Docker) → `test` (lint, scans) → `provisioning` (Terraform) → `deploy` (Ansible) → `destroy` (Terraform).
 
-Gates bloquants, jamais contournés (aucun `allow_failure` sur un test) : `terraform validate`, `tflint`, `ansible-lint`, `hadolint`, détection de secrets, et Trivy sur l'image Ghost comme sur les images de supervision (bloquant sur toute CVE CRITICAL). Une CVE ne passe qu'après analyse, documentée dans `.trivyignore`. Les déploiements attendent la fin de tous les tests, et chaque déploiement Ansible se termine par un contrôle HTTP 200 de l'URL publique.
+Gates bloquants, jamais contournés (aucun `allow_failure` sur un test) : `terraform validate`, `tflint`, `ansible-lint`, `hadolint`, et Trivy sur l'image Ghost, sur les images de supervision et sur le binaire `node_exporter` installé hors image (bloquant sur toute CVE CRITICAL). La détection de secrets GitLab produit un rapport sur chaque MR, sans bloquer. Une CVE ne passe qu'après analyse, documentée dans `.trivyignore`. Les déploiements attendent la fin de tous les tests, et chaque déploiement Ansible se termine par un contrôle HTTP 200 de l'URL publique.
 
 Jobs manuels principaux :
 
@@ -46,18 +46,18 @@ Jobs manuels principaux :
 | `deploy_data` | Crée/met à jour VPC, subnets, security group, RDS (`app/terraform/persistent`) |
 | `deploy_app_infra` | Crée/met à jour les EC2 prod + staging (`app/terraform/instances`) |
 | `deploy_dns` | Crée/met à jour les enregistrements DNS OVH (`app/terraform/dns`), doit être lancé après `deploy_app_infra` |
-| `deliver_staging` | Déploie l'image Ghost + Nginx/Certbot sur staging via Ansible (automatique sur push si les fichiers pertinents changent) |
-| `deploy_prod` | Promotion manuelle du même tag d'image vers la prod (+ Nginx/Certbot) |
+| `deliver_staging` | Déploie l'image Ghost + Nginx/Certbot sur staging via Ansible (automatique sur Merge Request si les fichiers pertinents changent) |
+| `deploy_prod` | Promotion manuelle du même tag d'image vers la prod (+ Nginx/Certbot), uniquement depuis une pipeline sur `main` |
 | `destroy_app_infra` | Détruit les EC2 (doit être lancé avant `destroy_data`) |
 | `destroy_data` | Détruit VPC/subnets/security group/RDS — bloqué automatiquement tant que des EC2 existent encore |
-| `destroy_dns` | Détruit les enregistrements DNS OVH |
+| `destroy_dns` | Détruit les enregistrements DNS OVH. À lancer en premier ; attend la fin des déploiements en cours (`resource_group`) |
 | `deploy_supervision` | Crée/met à jour l'instance EC2 de supervision (`supervision/terraform`) |
 | `deploy_supervision_config` | Déploie Prometheus + Grafana via Ansible sur l'instance de supervision |
 | `destroy_supervision` | Détruit l'instance de supervision — indépendant de `destroy_app_infra`/`destroy_data` |
 
 Ces boutons apparaissent selon deux logiques, qui coexistent :
 
-- **Sur une Merge Request** : automatiquement, si le diff touche les fichiers concernés (vrai fonctionnement GitOps).
+- **Sur une Merge Request** : automatiquement, si le diff touche les fichiers concernés (vrai fonctionnement GitOps). Exception : `deploy_prod`, jamais proposé sur une MR (la prod ne reçoit que du code mergé).
 - **Depuis "Run pipeline"** (CI/CD → Pipelines → Run pipeline, sur `main`) : toujours disponibles, quel que soit le diff — c'est le mode utilisé pour la démonstration/soutenance, accessible depuis un simple navigateur.
 
 Dans les deux cas, rien ne s'exécute sans un clic explicite sur le bouton du job.
@@ -151,7 +151,7 @@ docker compose up -d --build
 
 - **CMS** : Ghost 6 (image `ghost:6-alpine`)
 - **Base de données** : MySQL 8.4 LTS (Amazon RDS)
-- **Supervision** : Prometheus v3.15, Grafana 13, node_exporter
+- **Supervision** : Prometheus v3.15, Grafana 13, node_exporter 1.12
 - **Qualité et sécurité** : Trivy, tflint, hadolint, ansible-lint, détection de secrets GitLab
 - **Conteneurisation** : Docker / Docker Compose
 - **Infrastructure as Code** : Terraform (providers AWS + OVH)
