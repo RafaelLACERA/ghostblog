@@ -1,0 +1,7 @@
+# Sonde HTTP : succes = reponse 2xx en HTTPS valide
+modules:
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      fail_if_not_ssl: true

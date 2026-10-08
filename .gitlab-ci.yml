@@ -328,8 +328,10 @@ scan_supervision_images:
   script:
     - trivy image --exit-code 0 --severity CRITICAL,HIGH prom/prometheus:v3.15.0
     - trivy image --exit-code 0 --severity CRITICAL,HIGH grafana/grafana:13.2.3
+    - trivy image --exit-code 0 --severity CRITICAL,HIGH prom/blackbox-exporter:v0.29.0
     - trivy image --exit-code 1 --severity CRITICAL prom/prometheus:v3.15.0
     - trivy image --exit-code 1 --severity CRITICAL grafana/grafana:13.2.3
+    - trivy image --exit-code 1 --severity CRITICAL prom/blackbox-exporter:v0.29.0
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
