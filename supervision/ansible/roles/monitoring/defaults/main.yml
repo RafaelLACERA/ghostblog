@@ -8,10 +8,14 @@ monitoring_grafana_admin_password: ""
 monitoring_app_target: ""
 monitoring_staging_target: ""
 # Sites sondes de l'exterieur par blackbox_exporter, comme un visiteur
+# env : meme nom que les machines, pour les memes couleurs dans Grafana
 monitoring_site_targets:
-  - https://ghost.lacera.fr
-  - https://ghost-staging.lacera.fr
-  - https://ghost-monitoring.lacera.fr/api/health
+  - env: app
+    url: https://ghost.lacera.fr
+  - env: staging
+    url: https://ghost-staging.lacera.fr
+  - env: supervision
+    url: https://ghost-monitoring.lacera.fr/api/health
 # Alerte "instance down" (voir templates/alert-rules.yml.j2) - destinataire
 # et SMTP optionnel (voir docker-compose.yml.j2 : sans hote SMTP, l'alerte
 # fonctionne quand meme, seul l'envoi d'email echoue).
