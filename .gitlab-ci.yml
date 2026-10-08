@@ -89,8 +89,6 @@ variables:
       optional: true
     - job: ansible_lint
       optional: true
-    - job: tflint_app
-      optional: true
     - job: hadolint_dockerfile
       optional: true
     - job: scan_node_exporter
@@ -431,6 +429,14 @@ deploy_prod:
 deploy_supervision_config:
   extends: .tf_image
   stage: deploy
+  # Attend les tests de ce qu'il deploie, et seulement ceux-la
+  needs:
+    - job: ansible_lint
+      optional: true
+    - job: scan_supervision_images
+      optional: true
+    - job: scan_node_exporter
+      optional: true
   variables:
     TF_DIR: supervision/terraform
     TF_STATE_NAME: supervision
@@ -537,7 +543,7 @@ destroy_data:
   environment:
     name: data
     action: stop
-  # Garde-fou : pas de destruction du reseau tant que des EC2 existent
+  # Garde-fou : pas de destruction du reseau tant que des EC2 existent (app ou supervision)
   before_script:
     - apk add --no-cache curl
     - >
@@ -545,8 +551,17 @@ destroy_data:
       -u "gitlab-ci-token:${CI_JOB_TOKEN}"
       "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/app"
     - >
+      curl -sS -o supervision_state.json -w "HTTP %{http_code}\n"
+      -u "gitlab-ci-token:${CI_JOB_TOKEN}"
+      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/supervision"
+    - >
       if grep -q "aws_instance" app_state.json; then
         echo "Des instances EC2 existent encore dans le state 'app' : lance destroy_app_infra avant destroy_data."
+        exit 1
+      fi
+    - >
+      if grep -q "aws_instance" supervision_state.json; then
+        echo "L'instance de supervision existe encore : lance destroy_supervision avant destroy_data."
         exit 1
       fi
   rules:
