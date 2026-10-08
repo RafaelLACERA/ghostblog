@@ -10,6 +10,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    ovh = {
+      source  = "ovh/ovh"
+      version = "~> 0.44"
+    }
   }
 
   backend "http" {
@@ -19,3 +23,6 @@ terraform {
 provider "aws" {
   region = var.aws_region
 }
+
+# Identifiants lus dans les variables CI/CD OVH_*
+provider "ovh" {}

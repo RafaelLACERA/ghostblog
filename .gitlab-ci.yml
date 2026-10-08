@@ -165,15 +165,6 @@ terraform_validate_data:
       changes:
         - app/terraform/persistent/**/*
 
-terraform_validate_dns:
-  extends: .t_terraform_validate
-  variables:
-    TF_DIR: app/terraform/dns
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/dns/**/*
-
 terraform_validate_supervision:
   extends: .t_terraform_validate
   variables:
@@ -234,20 +225,6 @@ tflint_data:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - app/terraform/persistent/**/*
-    - if: '$CI_PIPELINE_SOURCE == "web"'
-
-tflint_dns:
-  stage: test
-  image:
-    name: ghcr.io/terraform-linters/tflint:latest
-    entrypoint: [""]
-  script:
-    - cd app/terraform/dns
-    - tflint
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/dns/**/*
     - if: '$CI_PIPELINE_SOURCE == "web"'
 
 tflint_supervision:
@@ -417,31 +394,6 @@ deploy_supervision:
       allow_failure: true
     - !reference [.rules_web_manual, rules]
 
-# Lit les IP du state app : a lancer apres deploy_app_infra
-deploy_dns:
-  extends: .t_terraform_deploy
-  variables:
-    TF_DIR: app/terraform/dns
-    TF_STATE_NAME: app-dns
-  # Lookup souple : pas d'echec si la supervision n'existe pas
-  before_script:
-    - apk add --no-cache curl jq
-    - >
-      curl -sS -o supervision_state.json -w "HTTP %{http_code}\n"
-      -u "gitlab-ci-token:${CI_JOB_TOKEN}"
-      "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/terraform/state/supervision" || true
-    - export TF_VAR_supervision_public_ip=$(jq -r '.outputs.supervision_public_ip.value // empty' supervision_state.json 2>/dev/null || true)
-  environment:
-    name: dns
-    action: start
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/dns/**/*
-      when: manual
-      allow_failure: true
-    - !reference [.rules_web_manual, rules]
-
 # ===== Stage deploy : configuration Ansible =====
 
 # Livraison continue en staging ; la prod reste manuelle
@@ -537,25 +489,7 @@ deploy_supervision_config:
       allow_failure: true
     - !reference [.rules_web_manual, rules]
 
-# ===== Stage destroy : dns d'abord, puis app et supervision, data en dernier =====
-
-destroy_dns:
-  extends: .t_terraform_destroy
-  variables:
-    TF_DIR: app/terraform/dns
-    TF_STATE_NAME: app-dns
-  environment:
-    name: dns
-    action: stop
-  # Attend la fin des deploiements : ne coupe pas le DNS pendant le controle HTTP 200
-  resource_group: app_infra
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/dns/**/*
-      when: manual
-      allow_failure: true
-    - !reference [.rules_web_manual, rules]
+# ===== Stage destroy : app et supervision (avec leur DNS), data en dernier =====
 
 destroy_app_infra:
   extends: .t_terraform_destroy
