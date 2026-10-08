@@ -24,3 +24,20 @@ scrape_configs:
         labels:
           env: staging
 {% endif %}
+  # Boite noire : on demande a blackbox de tester l'URL publique de chaque site
+  - job_name: site
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+{% for site in monitoring_site_targets %}
+          - "{{ site }}"
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115

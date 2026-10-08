@@ -49,6 +49,42 @@ groups:
         noDataState: NoData
         execErrState: Error
 
+      # P1 vue utilisateur : le site ne repond plus en HTTPS, meme si la machine tourne
+      - uid: site-down
+        title: "Site injoignable (app/staging)"
+        condition: seuil
+        data:
+          - refId: requete
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus-ds
+            model:
+              expr: "probe_success == bool 0"
+              instant: true
+              refId: requete
+          - refId: seuil
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: requete
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0]
+              refId: seuil
+        for: 2m
+        labels:
+          severity: critical
+          priority: P1
+        annotations:
+          summary: "Le site ne repond plus en HTTPS (probe_success == 0) - verifier le conteneur Ghost, Nginx, le certificat ou le DNS"
+        noDataState: NoData
+        execErrState: Error
+
       # Seuil SLA documente (voir dossier-projet) : 85% choisi car proche
       # du point de swapping observe lors de l'incident memoire reel sur
       # t3.micro (voir project_t3micro_memory_pressure).

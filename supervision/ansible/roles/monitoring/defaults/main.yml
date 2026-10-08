@@ -7,6 +7,10 @@ monitoring_grafana_admin_password: ""
 # absente du scrape (pas d'echec).
 monitoring_app_target: ""
 monitoring_staging_target: ""
+# Sites sondes de l'exterieur par blackbox_exporter, comme un visiteur
+monitoring_site_targets:
+  - https://ghost.lacera.fr
+  - https://ghost-staging.lacera.fr
 # Alerte "instance down" (voir templates/alert-rules.yml.j2) - destinataire
 # et SMTP optionnel (voir docker-compose.yml.j2 : sans hote SMTP, l'alerte
 # fonctionne quand meme, seul l'envoi d'email echoue).

@@ -15,6 +15,16 @@ services:
     networks:
       - monitoring-net
 
+  # Sonde externe : teste les sites comme un visiteur (aucun port publie)
+  blackbox:
+    image: prom/blackbox-exporter:v0.29.0
+    container_name: blackbox
+    restart: on-failure
+    volumes:
+      - ./blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    networks:
+      - monitoring-net
+
   grafana:
     image: grafana/grafana:13.2.3
     container_name: grafana

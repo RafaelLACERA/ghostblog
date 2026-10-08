@@ -28,6 +28,16 @@
     owner: ubuntu
     group: ubuntu
     mode: "0644"
+  notify: Redemarrer prometheus
+
+- name: Deployer la configuration de la sonde blackbox
+  ansible.builtin.copy:
+    src: blackbox.yml
+    dest: "{{ monitoring_dir }}/blackbox.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: "0644"
+  notify: Redemarrer blackbox
 
 # copy et non template : fichiers YAML statiques, aucune variable Jinja
 # dedans (contrairement a contact-points.yml.j2, qui reste un vrai
@@ -97,7 +107,7 @@
 # Doit s'executer apres "docker compose up -d" (le conteneur doit deja
 # exister pour qu'un restart soit possible) mais avant le healthcheck
 # (sinon celui-ci validerait l'etat d'avant redemarrage).
-- name: Appliquer immediatement le redemarrage de Grafana si necessaire
+- name: Appliquer immediatement les redemarrages necessaires
   ansible.builtin.meta: flush_handlers
 
 # Meme logique que ghost_app : ne pas se contenter de "le conteneur a

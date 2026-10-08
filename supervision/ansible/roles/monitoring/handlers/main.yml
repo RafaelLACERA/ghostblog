@@ -4,6 +4,18 @@
 # seul (bind mount) sans redemarrage n'est jamais pris en compte, meme
 # si "docker compose up -d" tourne juste apres (il ne recree pas un
 # conteneur dont le docker-compose.yml n'a pas change).
+- name: Redemarrer prometheus
+  ansible.builtin.command:
+    cmd: docker compose restart prometheus
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
+- name: Redemarrer blackbox
+  ansible.builtin.command:
+    cmd: docker compose restart blackbox
+    chdir: "{{ monitoring_dir }}"
+  changed_when: true
+
 - name: Redemarrer grafana
   ansible.builtin.command:
     cmd: docker compose restart grafana

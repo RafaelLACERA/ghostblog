@@ -58,7 +58,7 @@ Diagramme UML de déploiement détaillé (nœuds, environnements d'exécution, a
   - `supervision/terraform/` (state `supervision`) : instance EC2 dédiée à la supervision (Prometheus + Grafana), cycle de vie totalement indépendant des instances Ghost — elle continue de fonctionner (et de les observer, y compris comme `DOWN`) pendant un `destroy_app_infra`/`deploy_app_infra` de test.
 - **Nginx (reverse proxy) + Certbot (HTTPS via Let's Encrypt)** sur chaque instance (app, staging, et supervision), configurés par un rôle Ansible `nginx` — le domaine attendu est dérivé de `GHOST_URL_APP`/`GHOST_URL_STAGING` pour Ghost, de `MONITORING_DOMAIN` pour Grafana (voir section Variables CI/CD).
 - **Supervision (Prometheus + Grafana)** sur une instance EC2 dédiée (`supervision/`), scrapant `node_exporter` (binaire natif, pas de conteneur, pour ne pas fausser la mesure de charge) installé sur les instances app/staging. Dashboard Grafana et datasource Prometheus provisionnés automatiquement au démarrage. Limite assumée : les métriques/dashboards ne survivent pas à un `destroy_supervision` (pas de stockage S3/EBS dédié pour cette donnée à faible enjeu, contrairement à RDS/S3 pour le contenu Ghost) — c'est de l'observation temps réel pendant les cycles de test, pas de l'historisation long terme.
-- **Alerting Grafana** : 4 règles provisionnées par fichier comme la datasource/le dashboard — "instance down" (P1, `up == bool 0` sur node_exporter, `for: 2m`) et mémoire > 85 %, CPU > 90 %, disque > 80 % (P2, `for: 5m`). Destinataire email fixé dans `supervision/ansible/roles/monitoring/defaults/main.yml` (`monitoring_alert_email`, même principe que `nginx_certbot_email` ailleurs dans le projet — à changer là en cas de fork). SMTP optionnel (voir Variables CI/CD) : sans SMTP configuré, l'alerte se déclenche et s'affiche quand même dans Grafana (Alerting → Alert rules), seul l'envoi d'email échoue silencieusement.
+- **Alerting Grafana** : 5 règles provisionnées par fichier comme la datasource/le dashboard — "instance down" (P1, `up == bool 0` sur node_exporter, `for: 2m`), "site injoignable" (P1, `probe_success == bool 0`, sonde blackbox_exporter sur l'URL publique HTTPS, comme un visiteur) et mémoire > 85 %, CPU > 90 %, disque > 80 % (P2, `for: 5m`). Destinataire email fixé dans `supervision/ansible/roles/monitoring/defaults/main.yml` (`monitoring_alert_email`, même principe que `nginx_certbot_email` ailleurs dans le projet — à changer là en cas de fork). SMTP optionnel (voir Variables CI/CD) : sans SMTP configuré, l'alerte se déclenche et s'affiche quand même dans Grafana (Alerting → Alert rules), seul l'envoi d'email échoue silencieusement.
 
 ## Structure du dépôt
 
@@ -193,7 +193,7 @@ docker compose up -d --build
 
 - **CMS** : Ghost 6 (image `ghost:6-alpine`)
 - **Base de données** : MySQL 8.4 LTS (Amazon RDS)
-- **Supervision** : Prometheus v3.15, Grafana 13, node_exporter 1.12
+- **Supervision** : Prometheus v3.15, Grafana 13, node_exporter 1.12, blackbox_exporter 0.29
 - **Qualité et sécurité** : Trivy, tflint, hadolint, ansible-lint, détection de secrets GitLab
 - **Conteneurisation** : Docker / Docker Compose
 - **Infrastructure as Code** : Terraform (providers AWS + OVH)

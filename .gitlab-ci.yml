@@ -134,8 +134,9 @@ variables:
       > extra_vars.json
     - ansible-playbook -i "${TARGET_IP}," -u ubuntu --private-key ssh_key.pem app/ansible/playbook.yml -e @extra_vars.json
     # Verification externe : le site doit repondre 200 via DNS et HTTPS
+    # --retry : Ghost met ~30 s a demarrer (503 entre-temps), jusqu'a 2 min d'attente
     - >
-      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$GHOST_URL")
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 --retry 12 --retry-delay 10 "$GHOST_URL")
     - >
       if [ "$HTTP_CODE" != "200" ]; then
         echo "Echec de la verification post-deploiement : $GHOST_URL a repondu HTTP $HTTP_CODE (attendu 200)"
@@ -327,8 +328,10 @@ scan_supervision_images:
   script:
     - trivy image --exit-code 0 --severity CRITICAL,HIGH prom/prometheus:v3.15.0
     - trivy image --exit-code 0 --severity CRITICAL,HIGH grafana/grafana:13.2.3
+    - trivy image --exit-code 0 --severity CRITICAL,HIGH prom/blackbox-exporter:v0.29.0
     - trivy image --exit-code 1 --severity CRITICAL prom/prometheus:v3.15.0
     - trivy image --exit-code 1 --severity CRITICAL grafana/grafana:13.2.3
+    - trivy image --exit-code 1 --severity CRITICAL prom/blackbox-exporter:v0.29.0
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
