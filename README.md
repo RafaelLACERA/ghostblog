@@ -51,11 +51,10 @@ Diagramme UML de déploiement détaillé (nœuds, environnements d'exécution, a
 - **Deux instances EC2** (+ Elastic IP), une par environnement (`app` = production, `staging`), provisionnées via le même module Terraform réutilisable (`app/terraform/instances/modules/ec2-instance`), même security group et même clé SSH — l'environnement de staging reste conforme à la prod.
 - **Deux bases RDS MySQL 8.4** séparées (une par environnement) : tester sur staging ne touche jamais aux données de prod. Le support étendu payant d'AWS est explicitement désactivé (`engine_lifecycle_support`).
 - **Deux buckets S3** séparés (un par environnement) pour les médias Ghost (images uploadées, thèmes) via l'adaptateur `ghost-storage-adapter-s3` — sans ça, les uploads seraient perdus à chaque recréation des EC2 (contrairement à RDS, un volume Docker local ne survit pas à `destroy_app_infra`). Chaque instance accède à son bucket via un rôle IAM dédié (pas de clé AWS statique dans le conteneur).
-- **Quatre states Terraform à cycles de vie distincts**, chacun indépendant :
+- **Trois states Terraform à cycles de vie distincts**, chacun indépendant ; le DNS suit le cycle de vie de ce qu'il désigne :
   - `app/terraform/persistent/` (state `app-data`) : couche persistante (VPC, subnets, security groups, RDS, S3, IAM) — jamais détruite par les cycles de test des EC2.
-  - `app/terraform/instances/` (state `app`) : instances EC2 prod/staging, jetables et recréées à chaque cycle de test, lisant le réseau via `terraform_remote_state`.
-  - `app/terraform/dns/` (state `app-dns`) : enregistrements DNS OVH (`ghost.lacera.fr` / `ghost-staging.lacera.fr` / `ghost-monitoring.lacera.fr`), pointés vers les Elastic IP correspondantes — indépendant du cycle de vie des EC2 qu'il pointe.
-  - `supervision/terraform/` (state `supervision`) : instance EC2 dédiée à la supervision (Prometheus + Grafana), cycle de vie totalement indépendant des instances Ghost — elle continue de fonctionner (et de les observer, y compris comme `DOWN`) pendant un `destroy_app_infra`/`deploy_app_infra` de test.
+  - `app/terraform/instances/` (state `app`) : instances EC2 prod/staging et leurs enregistrements DNS OVH (`ghost.lacera.fr`, `ghost-staging.lacera.fr`), jetables et recréés à chaque cycle de test, lisant le réseau via `terraform_remote_state`.
+  - `supervision/terraform/` (state `supervision`) : instance EC2 dédiée à la supervision (Prometheus + Grafana) et son enregistrement DNS (`ghost-monitoring.lacera.fr`), cycle de vie totalement indépendant des instances Ghost — elle continue de fonctionner (et de les observer, y compris comme `DOWN`) pendant un `destroy_app_infra`/`deploy_app_infra` de test.
 - **Nginx (reverse proxy) + Certbot (HTTPS via Let's Encrypt)** sur chaque instance (app, staging, et supervision), configurés par un rôle Ansible `nginx` — le domaine attendu est dérivé de `GHOST_URL_APP`/`GHOST_URL_STAGING` pour Ghost, de `MONITORING_DOMAIN` pour Grafana (voir section Variables CI/CD).
 - **Supervision (Prometheus + Grafana)** sur une instance EC2 dédiée (`supervision/`), scrapant `node_exporter` (binaire natif, pas de conteneur, pour ne pas fausser la mesure de charge) installé sur les instances app/staging. Dashboard Grafana et datasource Prometheus provisionnés automatiquement au démarrage. Limite assumée : les métriques/dashboards ne survivent pas à un `destroy_supervision` (pas de stockage S3/EBS dédié pour cette donnée à faible enjeu, contrairement à RDS/S3 pour le contenu Ghost) — c'est de l'observation temps réel pendant les cycles de test, pas de l'historisation long terme.
 - **Alerting Grafana** : 5 règles provisionnées par fichier comme la datasource/le dashboard — "instance down" (P1, `up == bool 0` sur node_exporter, `for: 2m`), "site injoignable" (P1, `probe_success == bool 0`, sonde blackbox_exporter sur l'URL publique HTTPS, comme un visiteur) et mémoire > 85 %, CPU > 90 %, disque > 80 % (P2, `for: 5m`). Destinataire email fixé dans `supervision/ansible/roles/monitoring/defaults/main.yml` (`monitoring_alert_email`, même principe que `nginx_certbot_email` ailleurs dans le projet — à changer là en cas de fork). SMTP optionnel (voir Variables CI/CD) : sans SMTP configuré, l'alerte se déclenche et s'affiche quand même dans Grafana (Alerting → Alert rules), seul l'envoi d'email échoue silencieusement.
@@ -65,7 +64,7 @@ Diagramme UML de déploiement détaillé (nœuds, environnements d'exécution, a
 - `app/` :
   - `docker-compose.yml`, `dockerfile` : stack applicative Ghost (l'image se connecte à une base RDS externe, pas de MySQL en conteneur).
   - `ansible/` : rôles `hardening` (pare-feu, durcissement SSH), `docker` (installation Docker Engine), `node_exporter` (métriques système pour Prometheus), `ghost_app` (déploiement du conteneur Ghost), `nginx` (reverse proxy + Certbot/HTTPS).
-  - `terraform/persistent/`, `terraform/instances/`, `terraform/dns/` : voir Architecture ci-dessus.
+  - `terraform/persistent/`, `terraform/instances/` : voir Architecture ci-dessus.
 - `supervision/` : stack de supervision (Prometheus + Grafana), state Terraform (`terraform/`) et rôles Ansible (`ansible/roles/hardening`, `docker`, `monitoring`, `nginx`) dédiés — voir Architecture ci-dessus.
 - `.gitlab-ci.yml` : pipeline CI/CD, voir section dédiée ci-dessous.
 
@@ -87,12 +86,10 @@ Jobs manuels principaux :
 |---|---|
 | `deploy_data` | Crée/met à jour VPC, subnets, security group, RDS (`app/terraform/persistent`) |
 | `deploy_app_infra` | Crée/met à jour les EC2 prod + staging (`app/terraform/instances`) |
-| `deploy_dns` | Crée/met à jour les enregistrements DNS OVH (`app/terraform/dns`), doit être lancé après `deploy_app_infra` |
 | `deliver_staging` | Déploie l'image Ghost + Nginx/Certbot sur staging via Ansible (automatique sur Merge Request si les fichiers pertinents changent) |
 | `deploy_prod` | Promotion manuelle du même tag d'image vers la prod (+ Nginx/Certbot), uniquement depuis une pipeline sur `main` |
 | `destroy_app_infra` | Détruit les EC2 (doit être lancé avant `destroy_data`) |
 | `destroy_data` | Détruit VPC/subnets/security group/RDS — bloqué automatiquement tant que des EC2 existent encore |
-| `destroy_dns` | Détruit les enregistrements DNS OVH. À lancer en premier ; attend la fin des déploiements en cours (`resource_group`) |
 | `deploy_supervision` | Crée/met à jour l'instance EC2 de supervision (`supervision/terraform`) |
 | `deploy_supervision_config` | Déploie Prometheus + Grafana via Ansible sur l'instance de supervision |
 | `destroy_supervision` | Détruit l'instance de supervision — indépendant de `destroy_app_infra`/`destroy_data` |
@@ -138,12 +135,10 @@ Le token GitLab (`CI_JOB_TOKEN`) et les credentials du Container Registry (`CI_R
 
 L'ordre est important la première fois qu'on démarre une infra à partir de zéro (Certbot a besoin que le domaine résolve déjà vers l'instance pour valider son certificat) :
 
-1. `deploy_app_infra` (les EC2 doivent exister pour avoir une IP à pointer).
-2. `deploy_dns` — crée les enregistrements A vers les Elastic IP.
-3. Vérifier la propagation : `dig +short ghost.lacera.fr` / `dig +short ghost-staging.lacera.fr` doivent renvoyer les bonnes IP.
-4. `deliver_staging`/`deploy_prod` — le rôle `nginx` installe le reverse proxy et obtient le certificat HTTPS, maintenant que le domaine résout correctement.
+1. `deploy_app_infra` — crée les EC2 et, dans le même state, les enregistrements A vers leurs Elastic IP.
+2. `deliver_staging`/`deploy_prod` — le rôle `nginx` attend que le domaine résolve, installe le reverse proxy et obtient le certificat HTTPS.
 
-Si l'IP change (recréation des EC2 après un `destroy_app_infra`), relancer `deploy_dns` pour repointer le DNS avant de redéployer l'appli.
+Les enregistrements DNS sont détruits avec les instances (`destroy_app_infra`) : aucun ordre de destruction à respecter.
 
 ## Bootstrap supervision (une seule fois)
 
@@ -151,13 +146,12 @@ Si l'IP change (recréation des EC2 après un `destroy_app_infra`), relancer `de
 
 1. Donner une valeur provisoire à `SUPERVISION_IP_CIDR` (ex: `127.0.0.1/32`) si elle n'a pas encore de vraie valeur.
 2. `deploy_data` — crée aussi le security group `supervision`, indépendant de cette variable.
-3. `deploy_supervision` — crée l'instance EC2 de supervision.
+3. `deploy_supervision` — crée l'instance EC2 de supervision et son enregistrement DNS `ghost-monitoring.lacera.fr`.
 4. Récupérer l'IP **privée** de l'instance (`terraform output -raw supervision_private_ip` dans les logs du job, ou dans la console AWS) — pas l'IP publique/Elastic IP, le trafic de scrape passe par le réseau privé du VPC.
 5. Mettre à jour `SUPERVISION_IP_CIDR` avec `<ip_privée>/32`.
 6. Relancer `deploy_data` — met à jour la règle du security group `app` in-place, sans recréer d'instance.
-7. `deploy_dns` — crée l'enregistrement `ghost-monitoring.lacera.fr` (nécessite que `deploy_supervision` ait déjà tourné).
-8. `deploy_supervision_config` — installe Prometheus + Grafana, obtient le certificat HTTPS pour `ghost-monitoring.lacera.fr`.
-9. `deliver_staging`/`deploy_prod` si pas déjà fait — installe `node_exporter` sur app/staging (ajouté à `app/ansible/playbook.yml`).
+7. `deploy_supervision_config` — installe Prometheus + Grafana, obtient le certificat HTTPS pour `ghost-monitoring.lacera.fr`.
+8. `deliver_staging`/`deploy_prod` si pas déjà fait — installe `node_exporter` sur app/staging (ajouté à `app/ansible/playbook.yml`).
 
 Vérification : `https://ghost-monitoring.lacera.fr` doit afficher Grafana (identifiants `admin`/`$GRAFANA_ADMIN_PASSWORD`), avec la datasource Prometheus et le dashboard "ghostblog - app/staging" déjà provisionnés, ciblant `app`/`staging` en `UP`.
 

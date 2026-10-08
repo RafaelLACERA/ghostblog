@@ -38,3 +38,9 @@ variable "gitlab_ci_job_token" {
   type        = string
   sensitive   = true
 }
+
+variable "dns_zone" {
+  description = "Zone DNS OVH des enregistrements"
+  type        = string
+  default     = "lacera.fr"
+}
