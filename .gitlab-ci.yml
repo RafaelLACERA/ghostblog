@@ -93,6 +93,8 @@ variables:
       optional: true
     - job: hadolint_dockerfile
       optional: true
+    - job: scan_node_exporter
+      optional: true
   before_script:
     - apk add --no-cache ansible openssh-client jq curl
   script:
@@ -333,6 +335,26 @@ scan_supervision_images:
         - supervision/ansible/roles/monitoring/templates/docker-compose.yml.j2
     - if: '$CI_PIPELINE_SOURCE == "web"'
 
+# Binaire natif hors image : meme version que roles/node_exporter/defaults/main.yml
+scan_node_exporter:
+  stage: test
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  variables:
+    NODE_EXPORTER_VERSION: "1.12.1"
+  script:
+    - wget -q https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
+    - tar xzf node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz
+    - trivy rootfs --exit-code 0 --severity CRITICAL,HIGH node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64
+    - trivy rootfs --exit-code 1 --severity CRITICAL node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - app/ansible/roles/node_exporter/**/*
+        - supervision/ansible/roles/node_exporter/**/*
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
 # ===== Stage provisioning : creation de l'infrastructure =====
 
 # Couche persistante : state separe, jamais detruite avec les instances
@@ -446,15 +468,8 @@ deploy_prod:
   environment:
     name: app
   resource_group: app_infra
+  # Prod uniquement depuis main : jamais depuis une MR non mergee
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-      changes:
-        - app/terraform/instances/**/*
-        - app/ansible/**/*
-        - app/dockerfile
-        - app/docker-compose.yml
-      when: manual
-      allow_failure: true
     - !reference [.rules_web_manual, rules]
 
 # Lookup souple des IP app/staging : ne bloque pas si l'application est detruite
@@ -529,6 +544,8 @@ destroy_dns:
   environment:
     name: dns
     action: stop
+  # Attend la fin des deploiements : ne coupe pas le DNS pendant le controle HTTP 200
+  resource_group: app_infra
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
