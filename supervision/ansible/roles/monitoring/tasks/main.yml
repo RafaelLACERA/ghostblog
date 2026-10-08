@@ -62,7 +62,7 @@
     mode: "0644"
   notify: Redemarrer grafana
 
-- name: Provisionner la regle d'alerte "instance down"
+- name: Provisionner les regles d'alerte (P1 et P2)
   ansible.builtin.copy:
     src: alert-rules.yml
     dest: "{{ monitoring_dir }}/grafana/provisioning/alerting/alert-rules.yml"

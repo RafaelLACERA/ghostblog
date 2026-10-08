@@ -51,7 +51,7 @@ groups:
 
       # P1 vue utilisateur : le site ne repond plus en HTTPS, meme si la machine tourne
       - uid: site-down
-        title: "Site injoignable (app/staging)"
+        title: "Site injoignable (app/staging/supervision)"
         condition: seuil
         data:
           - refId: requete
