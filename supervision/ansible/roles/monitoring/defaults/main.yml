@@ -11,6 +11,7 @@ monitoring_staging_target: ""
 monitoring_site_targets:
   - https://ghost.lacera.fr
   - https://ghost-staging.lacera.fr
+  - https://ghost-monitoring.lacera.fr/api/health
 # Alerte "instance down" (voir templates/alert-rules.yml.j2) - destinataire
 # et SMTP optionnel (voir docker-compose.yml.j2 : sans hote SMTP, l'alerte
 # fonctionne quand meme, seul l'envoi d'email echoue).
